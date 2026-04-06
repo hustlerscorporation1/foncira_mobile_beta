@@ -1,0 +1,56 @@
+// ignore_for_file: unused_import
+
+import 'package:foncira/page/home_page.dart';
+import 'package:foncira/page/splash_screen.dart';
+import 'package:foncira/services/config.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'page/loginpage_refactored.dart';
+import 'page/registerpage.dart';
+import 'page/presentation.dart';
+import 'providers/auth_provider.dart';
+import 'providers/terrain_provider.dart';
+import 'providers/verification_provider.dart';
+import 'providers/notification_provider.dart';
+import 'theme/app_theme.dart';
+import 'corbeille/corbeille/accueil_acheteur.dart';
+
+// ══════════════════════════════════════════════════════════════
+//  FONCIRA — Main Entry Point
+// ══════════════════════════════════════════════════════════════
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+  runApp(const FonciraApp());
+}
+
+class FonciraApp extends StatelessWidget {
+  const FonciraApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => TerrainProvider()),
+        ChangeNotifierProvider(create: (_) => VerificationProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+      ],
+      child: MaterialApp(
+        title: 'FONCIRA',
+        debugShowCheckedModeBanner: false,
+        theme: FonciraTheme.darkTheme,
+        initialRoute: '/',
+        routes: {
+          '/': (context) => const SplashPage(),
+          '/onboarding': (context) => const Presentation(),
+          '/login': (context) => const LoginPage(),
+          '/register': (context) => const Registration(),
+          '/home': (context) => const FonciraHomePage(),
+        },
+      ),
+    );
+  }
+}

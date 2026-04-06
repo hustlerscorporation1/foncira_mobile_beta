@@ -1,0 +1,23 @@
+﻿Analyzing terrain_detail_foncira.dart...                        
+
+warning - Unused import: 'package:latlong2/latlong.dart' - lib\page\terrain_detail_foncira.dart:5:8 - unused_import
+
+flutter : 1 issue found. 
+(ran in 1.2s)
+At line:1 char:1
++ flutter analyze 
+--no-pub lib/page/terrain_
+detail_foncira.dart 2>&1 
+|  ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (1  
+   issue found. (ran in   
+  1.2s):String) [], Re    
+moteException
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 

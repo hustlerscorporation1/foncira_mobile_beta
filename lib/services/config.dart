@@ -1,0 +1,5 @@
+import 'package:flutter/material.dart';
+
+const supabaseUrl = 'https://rmdncmywkjhoqwglypov.supabase.co';
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtZG5jbXl3a2pob3F3Z2x5cG92Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNTk0MTYsImV4cCI6MjA3MjczNTQxNn0.xKgZITOzHn588S24uanEnCRlatDSp7hREkOtENsxI3g";
+
