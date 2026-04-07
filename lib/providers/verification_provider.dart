@@ -1,148 +1,179 @@
 import 'package:flutter/foundation.dart';
 import '../models/verification_request.dart';
 import '../models/verification_step.dart';
-import '../data/verification_data.dart';
+import '../services/verification_service.dart';
+import '../services/supabase_service.dart';
 
 // ══════════════════════════════════════════════════════════════
-//  FONCIRA — Verification Provider
+//  FONCIRA — Verification Provider (Supabase-backed)
 // ══════════════════════════════════════════════════════════════
 
 class VerificationProvider with ChangeNotifier {
-  List<VerificationRequest> _verifications = [];
-  bool _isLoading = false;
+  final VerificationService _verificationService = VerificationService();
+  final SupabaseService _supabaseService = SupabaseService();
 
-  List<VerificationRequest> get verifications => _verifications;
+  List<Map<String, dynamic>> _verifications = [];
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  List<Map<String, dynamic>> get verifications => _verifications;
   bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
   VerificationProvider() {
     loadVerifications();
   }
 
-  void loadVerifications() {
+  Future<void> loadVerifications() async {
     _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
 
-    _verifications = List.from(verificationsData);
-
-    _isLoading = false;
-    notifyListeners();
+    try {
+      if (!_supabaseService.isAuthenticated) {
+        _verifications = [];
+      } else {
+        _verifications = await _verificationService.getUserVerifications();
+      }
+    } catch (e) {
+      _errorMessage = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  List<VerificationRequest> get activeVerifications =>
-      _verifications.where((v) => !v.isComplete).toList();
+  List<Map<String, dynamic>> get activeVerifications =>
+      _verifications.where((v) => v['status'] != 'rapport_livre').toList();
 
-  List<VerificationRequest> get completedVerifications =>
-      _verifications.where((v) => v.isComplete).toList();
+  List<Map<String, dynamic>> get completedVerifications =>
+      _verifications.where((v) => v['status'] == 'rapport_livre').toList();
 
   int get activeCount => activeVerifications.length;
 
-  VerificationRequest? getById(String id) {
+  Map<String, dynamic>? getById(String id) {
     try {
-      return _verifications.firstWhere((v) => v.id == id);
+      return _verifications.firstWhere((v) => v['id'] == id);
     } catch (e) {
       return null;
     }
   }
 
-  // ── Create new verification request ────────────────────────
-  void createFromMarketplace({
+  // ── Create from marketplace ────────────────────────────────
+  Future<bool> createFromMarketplace({
     required String terrainId,
     required String terrainTitle,
     required String terrainLocation,
     double? terrainPrice,
-    String? terrainImageUrl,
-  }) {
-    final newRequest = VerificationRequest(
-      id: 'VR${_verifications.length + 1}'.padLeft(5, '0'),
-      userId: 'U001',
-      terrainId: terrainId,
-      source: VerificationSource.fonciraMarketplace,
-      globalStatus: VerificationGlobalStatus.receptionnee,
-      terrainTitle: terrainTitle,
-      terrainLocation: terrainLocation,
-      terrainPrice: terrainPrice,
-      terrainImageUrl: terrainImageUrl,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      steps: _createInitialSteps(),
-    );
-
-    _verifications.insert(0, newRequest);
+    String? documentType,
+    String? sharingLink,
+  }) async {
+    _isLoading = true;
     notifyListeners();
+
+    try {
+      final verificationId = await _verificationService
+          .createMarketplaceVerification(
+            terrainId: terrainId,
+            terrainTitle: terrainTitle,
+            terrainLocation: terrainLocation,
+            priceFCFA: terrainPrice ?? 150000,
+            documentType: documentType ?? 'ne_sais_pas',
+            sharingLink: sharingLink,
+          );
+
+      if (verificationId != null) {
+        await loadVerifications();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _errorMessage = e.toString();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  void createFromExternal({
+  // ── Create from external ───────────────────────────────────
+  Future<bool> createFromExternal({
     required String title,
     required String location,
     double? price,
     String? sellerContact,
     String? description,
-    String? source,
-    List<String>? photos,
-  }) {
-    final newRequest = VerificationRequest(
-      id: 'VR${_verifications.length + 1}'.padLeft(5, '0'),
-      userId: 'U001',
-      source: VerificationSource.externe,
-      globalStatus: VerificationGlobalStatus.receptionnee,
-      terrainTitle: title,
-      terrainLocation: location,
-      terrainPrice: price,
-      externalLocation: location,
-      externalSellerContact: sellerContact,
-      externalPrice: price,
-      externalDescription: description,
-      externalSource: source,
-      externalPhotos: photos,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-      steps: _createInitialSteps(),
-    );
-
-    _verifications.insert(0, newRequest);
+    String? documentType,
+    String? sharingLink,
+  }) async {
+    _isLoading = true;
     notifyListeners();
+
+    try {
+      final verificationId = await _verificationService
+          .createExternalVerification(
+            terrainTitle: title,
+            terrainLocation: location,
+            priceFCFA: price ?? 150000,
+            documentType: documentType ?? 'ne_sais_pas',
+            sharingLink: sharingLink,
+          );
+
+      if (verificationId != null) {
+        await loadVerifications();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      _errorMessage = e.toString();
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
-  List<VerificationStep> _createInitialSteps() {
-    return [
-      VerificationStep(
-        stepName: 'Réception de la demande',
-        description: 'Votre demande a été reçue et enregistrée.',
-        status: StepStatus.termine,
-        startedAt: DateTime.now(),
-        completedAt: DateTime.now(),
-        icon: '📩',
-      ),
-      VerificationStep(
-        stepName: 'Pré-analyse',
-        description: 'Analyse préliminaire des documents fournis.',
-        status: StepStatus.enAttente,
-        icon: '🔍',
-      ),
-      VerificationStep(
-        stepName: 'Vérification administrative',
-        description: 'Vérification auprès des services fonciers.',
-        status: StepStatus.enAttente,
-        icon: '📋',
-      ),
-      VerificationStep(
-        stepName: 'Vérification terrain',
-        description: 'Visite physique du terrain et vérification des bornes.',
-        status: StepStatus.enAttente,
-        icon: '🗺️',
-      ),
-      VerificationStep(
-        stepName: 'Analyse finale',
-        description: 'Synthèse et évaluation du risque.',
-        status: StepStatus.enAttente,
-        icon: '📊',
-      ),
-      VerificationStep(
-        stepName: 'Livraison du rapport',
-        description: 'Rapport de vérification remis à l\'utilisateur.',
-        status: StepStatus.enAttente,
-        icon: '📄',
-      ),
-    ];
+  // ── Update status ───────────────────────────────────────────
+  Future<bool> updateStatus(String verificationId, String newStatus) async {
+    try {
+      final success = await _verificationService.updateVerificationStatus(
+        verificationId,
+        newStatus,
+      );
+      if (success) {
+        await loadVerifications();
+      }
+      return success;
+    } catch (e) {
+      _errorMessage = e.toString();
+      return false;
+    }
+  }
+
+  // ── Complete milestone ────────────────────────────────────
+  Future<bool> completeMilestone({
+    required String milestoneId,
+    String? notes,
+    Map<String, dynamic>? locationPhotos,
+  }) async {
+    try {
+      final success = await _verificationService.completeMilestone(
+        milestoneId,
+        notes: notes,
+        locationPhotos: locationPhotos,
+      );
+      if (success) {
+        await loadVerifications();
+      }
+      return success;
+    } catch (e) {
+      _errorMessage = e.toString();
+      return false;
+    }
+  }
+
+  void clearError() {
+    _errorMessage = null;
+    notifyListeners();
   }
 }

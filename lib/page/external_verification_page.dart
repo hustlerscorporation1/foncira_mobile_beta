@@ -63,7 +63,6 @@ class _ExternalVerificationPageState extends State<ExternalVerificationPage> {
       price: double.tryParse(_priceController.text.trim()),
       sellerContact: _sellerController.text.trim(),
       description: _descriptionController.text.trim(),
-      source: _selectedSource,
     );
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -155,8 +154,7 @@ class _ExternalVerificationPageState extends State<ExternalVerificationPage> {
                         child: Text(
                           source,
                           style: GoogleFonts.inter(
-                            color:
-                                isSelected ? kPrimaryLight : kTextSecondary,
+                            color: isSelected ? kPrimaryLight : kTextSecondary,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
@@ -271,8 +269,10 @@ class _ExternalVerificationPageState extends State<ExternalVerificationPage> {
             : null,
         filled: true,
         fillColor: kDarkCard,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: kBorderDark),

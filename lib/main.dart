@@ -2,10 +2,9 @@
 
 import 'package:foncira/page/home_page.dart';
 import 'package:foncira/page/splash_screen.dart';
-import 'package:foncira/services/config.dart';
+import 'package:foncira/services/supabase_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'page/loginpage_refactored.dart';
 import 'page/registerpage.dart';
 import 'page/presentation.dart';
@@ -13,6 +12,7 @@ import 'providers/auth_provider.dart';
 import 'providers/terrain_provider.dart';
 import 'providers/verification_provider.dart';
 import 'providers/notification_provider.dart';
+import 'providers/user_mode_provider.dart';
 import 'theme/app_theme.dart';
 import 'corbeille/corbeille/accueil_acheteur.dart';
 
@@ -22,7 +22,10 @@ import 'corbeille/corbeille/accueil_acheteur.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+
+  // Initialize Supabase service
+  await SupabaseService().initialize();
+
   runApp(const FonciraApp());
 }
 
@@ -37,6 +40,7 @@ class FonciraApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => TerrainProvider()),
         ChangeNotifierProvider(create: (_) => VerificationProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => UserModeProvider()),
       ],
       child: MaterialApp(
         title: 'FONCIRA',

@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
 import '../models/user.dart';
-import '../services/api_service.dart';
+import '../services/supabase_service.dart';
 
 class AuthProvider with ChangeNotifier {
+  final SupabaseService _supabaseService = SupabaseService();
+
   User? _currentUser;
   bool _isLoading = false;
   String? _errorMessage;
@@ -10,7 +12,11 @@ class AuthProvider with ChangeNotifier {
   User? get currentUser => _currentUser;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
-  bool get isAuthenticated => _currentUser != null;
+  bool get isAuthenticated => _supabaseService.isAuthenticated;
+
+  AuthProvider() {
+    _checkAuthStatus();
+  }
 
   void _setLoading(bool loading) {
     _isLoading = loading;
@@ -27,12 +33,18 @@ class AuthProvider with ChangeNotifier {
     _setError(null);
 
     try {
-      final token = await ApiService.login(email: email, password: password);
-      if (token != null) {
-        // Get user info after successful login
-        final user = await ApiService.getCurrentUser();
-        if (user != null) {
-          _currentUser = user;
+      final success = await _supabaseService.signInWithEmail(email, password);
+      if (success) {
+        final userData = await _supabaseService.getCurrentUserData();
+        if (userData != null) {
+          _currentUser = User(
+            id: userData['id'] ?? '',
+            email: userData['email'] ?? email,
+            firstName: userData['first_name'],
+            phoneNumber: userData['phone_number'],
+            isActive: true,
+            createdAt: DateTime.now(),
+          );
           _setLoading(false);
           return true;
         }
@@ -58,18 +70,28 @@ class AuthProvider with ChangeNotifier {
     _setError(null);
 
     try {
-      final authResponse = await ApiService.register(
-        email: email,
-        password: password,
+      final success = await _supabaseService.signUpWithEmail(
+        email,
+        password,
         firstName: firstName,
         lastName: lastName,
         phoneNumber: phoneNumber,
       );
 
-      if (authResponse != null) {
-        _currentUser = authResponse.user;
-        _setLoading(false);
-        return true;
+      if (success) {
+        final userData = await _supabaseService.getCurrentUserData();
+        if (userData != null) {
+          _currentUser = User(
+            id: userData['id'] ?? '',
+            email: email,
+            firstName: firstName,
+            phoneNumber: phoneNumber,
+            isActive: true,
+            createdAt: DateTime.now(),
+          );
+          _setLoading(false);
+          return true;
+        }
       }
       _setError('Registration failed. Please try again.');
       _setLoading(false);
@@ -82,32 +104,37 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<void> logout() async {
-    await ApiService.logout();
-    _currentUser = null;
-    _errorMessage = null;
-    notifyListeners();
+    try {
+      await _supabaseService.signOut();
+      _currentUser = null;
+      _errorMessage = null;
+      notifyListeners();
+    } catch (e) {
+      _setError('Logout failed: $e');
+    }
   }
 
-  Future<void> checkAuthStatus() async {
+  Future<void> _checkAuthStatus() async {
     _setLoading(true);
-    
+
     try {
-      final isLoggedIn = await ApiService.isLoggedIn();
-      if (isLoggedIn) {
-        final user = await ApiService.getCurrentUser();
-        if (user != null) {
-          _currentUser = user;
+      if (_supabaseService.isAuthenticated) {
+        final userData = await _supabaseService.getCurrentUserData();
+        if (userData != null) {
+          _currentUser = User(
+            id: userData['id'] ?? '',
+            email: userData['email'] ?? '',
+            firstName: userData['first_name'],
+            phoneNumber: userData['phone_number'],
+            isActive: true,
+            createdAt: DateTime.now(),
+          );
         }
       }
     } catch (e) {
-      print('Error checking auth status: $e');
+      _setError('Failed to check auth status: $e');
+    } finally {
+      _setLoading(false);
     }
-    
-    _setLoading(false);
-  }
-
-  void clearError() {
-    _setError(null);
   }
 }
-

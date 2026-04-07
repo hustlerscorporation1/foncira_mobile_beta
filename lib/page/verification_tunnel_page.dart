@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:provider/provider.dart';
 import '../theme/colors.dart';
 import '../component/foncira_button.dart';
 import '../models/verification_state.dart';
+import '../providers/verification_provider.dart';
+import '../services/supabase_service.dart';
 
 const String kGuaranteeText =
     'On garantit un rapport complet, honnête et livré en 10 jours. Si on ne livre pas, vous êtes remboursé.';
 
 // ══════════════════════════════════════════════════════════════
-//  FONCIRA — Verification Tunnel (Redesigned: 8-9 Screens)
+//  FONCIRA — Verification Tunnel (Supabase-backed)
 // ══════════════════════════════════════════════════════════════
 
 class VerificationTunnelPage extends StatefulWidget {
@@ -158,15 +161,61 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
     });
   }
 
-  void _submitPayment(String method) {
+  void _submitPayment(String method) async {
+    if (!SupabaseService().isAuthenticated) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Vous devez être connecté')));
+      return;
+    }
+
     setState(() => isLoadingPayment = true);
-    Future.delayed(const Duration(seconds: 2), () {
+
+    try {
+      final provider = context.read<VerificationProvider>();
+
+      // Create verification based on terrain type
+      bool success;
+      if (widget.isExternalTerrain) {
+        success = await provider.createFromExternal(
+          title: state.localisation,
+          location: state.localisation,
+          price: state.prixFCFA.toDouble(),
+          documentType: state.typeDocument?.toString(),
+          sharingLink: state.lienPartage,
+        );
+      } else {
+        // Marketplace verification (requires terrainTitle from initialState)
+        success = await provider.createFromMarketplace(
+          terrainId: '', // From marketplace, would be in terrain data
+          terrainTitle: state.terrainTitre ?? state.localisation,
+          terrainLocation: state.localisation,
+          terrainPrice: state.prixFCFA.toDouble(),
+          documentType: state.typeDocument?.toString(),
+          sharingLink: state.lienPartage,
+        );
+      }
+
       if (mounted) {
         setState(() => isLoadingPayment = false);
-        _goToStep(6);
-        _startDashboardSimulation();
+
+        if (success) {
+          _goToStep(6);
+          _startDashboardSimulation();
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Erreur: ${provider.errorMessage}')),
+          );
+        }
       }
-    });
+    } catch (e) {
+      if (mounted) {
+        setState(() => isLoadingPayment = false);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+      }
+    }
   }
 
   void _startDashboardSimulation() {

@@ -1228,7 +1228,6 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
       terrainTitle: t.title,
       terrainLocation: t.fullLocation,
       terrainPrice: t.price,
-      terrainImageUrl: t.imageUrl,
     );
 
     // Navigate to verification tunnel

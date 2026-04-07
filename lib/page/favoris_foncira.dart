@@ -3,9 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../theme/colors.dart';
 import '../models/terrain.dart';
+import '../models/verification_state.dart';
 import '../providers/terrain_provider.dart';
 import '../component/terrain_card.dart';
 import 'terrain_detail_foncira.dart';
+import 'verification_tunnel_page.dart';
 
 // ══════════════════════════════════════════════════════════════
 //  FONCIRA — Favorites Page (Premium)
@@ -31,8 +33,11 @@ class FavorisPageFoncira extends StatelessWidget {
                 pinned: true,
                 expandedHeight: 140,
                 leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_rounded,
-                      color: kTextPrimary, size: 20),
+                  icon: const Icon(
+                    Icons.arrow_back_ios_rounded,
+                    color: kTextPrimary,
+                    size: 20,
+                  ),
                   onPressed: () => Navigator.pop(context),
                 ),
                 flexibleSpace: FlexibleSpaceBar(
@@ -72,8 +77,11 @@ class FavorisPageFoncira extends StatelessWidget {
                       padding: const EdgeInsets.only(right: 8),
                       child: TextButton.icon(
                         onPressed: () => _showClearDialog(context, provider),
-                        icon: const Icon(Icons.delete_outline_rounded,
-                            color: kTextMuted, size: 18),
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          color: kTextMuted,
+                          size: 18,
+                        ),
                         label: Text(
                           'Tout vider',
                           style: GoogleFonts.inter(
@@ -89,13 +97,17 @@ class FavorisPageFoncira extends StatelessWidget {
               // ── Counter chip ──
               SliverToBoxAdapter(
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
+                          horizontal: 10,
+                          vertical: 5,
+                        ),
                         decoration: BoxDecoration(
                           color: kDangerSurface,
                           borderRadius: BorderRadius.circular(8),
@@ -133,63 +145,170 @@ class FavorisPageFoncira extends StatelessWidget {
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final terrain = favoris[index];
-                        return Dismissible(
-                          key: ValueKey(terrain.id),
-                          direction: DismissDirection.endToStart,
-                          onDismissed: (_) {
-                            provider.toggleFavorite(terrain.id);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  '${terrain.title} retiré des favoris',
-                                  style: GoogleFonts.inter(fontSize: 13),
-                                ),
-                                backgroundColor: kDarkCard,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                action: SnackBarAction(
-                                  label: 'Annuler',
-                                  textColor: kGold,
-                                  onPressed: () =>
-                                      provider.toggleFavorite(terrain.id),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final terrain = favoris[index];
+                      final terrainId = terrain['id'] ?? '';
+                      final title = terrain['title'] ?? 'Terrain';
+                      final location = terrain['location'] ?? '';
+
+                      return Dismissible(
+                        key: ValueKey(terrainId),
+                        direction: DismissDirection.endToStart,
+                        onDismissed: (_) {
+                          provider.toggleFavorite(terrainId);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                '$title retiré des favoris',
+                                style: GoogleFonts.inter(fontSize: 13),
+                              ),
+                              backgroundColor: kDarkCard,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              action: SnackBarAction(
+                                label: 'Annuler',
+                                textColor: kGold,
+                                onPressed: () =>
+                                    provider.toggleFavorite(terrainId),
+                              ),
+                            ),
+                          );
+                        },
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 24),
+                          margin: const EdgeInsets.only(bottom: 14),
+                          decoration: BoxDecoration(
+                            color: kDangerSurface,
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: const Icon(
+                            Icons.delete_rounded,
+                            color: kDanger,
+                            size: 28,
+                          ),
+                        ),
+                        child: GestureDetector(
+                          onTap: () {
+                            final initialState = VerificationState(
+                              terrainTitre: title,
+                              localisation: location,
+                              prixFCFA:
+                                  (terrain['price_fcfa'] as num?)?.toInt() ??
+                                  150000,
+                            );
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => VerificationTunnelPage(
+                                  initialState: initialState,
                                 ),
                               ),
                             );
                           },
-                          background: Container(
-                            alignment: Alignment.centerRight,
-                            padding: const EdgeInsets.only(right: 24),
+                          child: Container(
                             margin: const EdgeInsets.only(bottom: 14),
+                            padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: kDangerSurface,
-                              borderRadius: BorderRadius.circular(18),
+                              color: kDarkCard,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: kBorderDark),
                             ),
-                            child: const Icon(Icons.delete_rounded,
-                                color: kDanger, size: 28),
-                          ),
-                          child: TerrainCard(
-                            terrain: terrain,
-                            isHorizontal: true,
-                            isFavorite: true,
-                            onFavoriteTap: () =>
-                                provider.toggleFavorite(terrain.id),
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    TerrainDetailFoncira(terrain: terrain),
-                              ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    color: kDarkCardLight,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Center(
+                                    child: Icon(
+                                      Icons.landscape,
+                                      color: kPrimaryLight,
+                                      size: 36,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        title,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.outfit(
+                                          color: kTextPrimary,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.location_on_outlined,
+                                            color: kTextMuted,
+                                            size: 13,
+                                          ),
+                                          const SizedBox(width: 3),
+                                          Expanded(
+                                            child: Text(
+                                              location,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: GoogleFonts.inter(
+                                                color: kTextMuted,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        '${terrain['price_fcfa'] ?? 0} FCFA',
+                                        style: GoogleFonts.inter(
+                                          color: kPrimaryLight,
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () =>
+                                          provider.toggleFavorite(terrainId),
+                                      child: const Icon(
+                                        Icons.favorite_rounded,
+                                        color: kGold,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const Icon(
+                                      Icons.arrow_forward_ios,
+                                      color: kTextMuted,
+                                      size: 14,
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
                           ),
-                        );
-                      },
-                      childCount: favoris.length,
-                    ),
+                        ),
+                      );
+                    }, childCount: favoris.length),
                   ),
                 ),
 
@@ -265,12 +384,15 @@ class FavorisPageFoncira extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Annuler',
-                style: GoogleFonts.inter(color: kTextMuted)),
+            child: Text('Annuler', style: GoogleFonts.inter(color: kTextMuted)),
           ),
           TextButton(
             onPressed: () {
-              final ids = provider.favorites.map((t) => t.id).toList();
+              final ids = provider.favorites
+                  .map((t) => t['id']?.toString())
+                  .whereType<String>()
+                  .where((id) => id.isNotEmpty)
+                  .toList();
               for (final id in ids) {
                 provider.toggleFavorite(id);
               }

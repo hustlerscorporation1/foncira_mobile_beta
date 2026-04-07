@@ -1,14 +1,16 @@
 import 'package:flutter/foundation.dart';
 import '../models/terrain.dart';
-import '../data/terrain_data.dart';
+import '../services/terrain_service.dart';
 
 // ══════════════════════════════════════════════════════════════
-//  FONCIRA — Terrain Provider (enriched)
+//  FONCIRA — Terrain Provider (Supabase-backed)
 // ══════════════════════════════════════════════════════════════
 
 class TerrainProvider with ChangeNotifier {
-  List<Terrain> _terrains = [];
-  List<Terrain> _filteredTerrains = [];
+  final TerrainService _terrainService = TerrainService();
+
+  List<Map<String, dynamic>> _terrains = [];
+  List<Map<String, dynamic>> _filteredTerrains = [];
   final Set<String> _favoriteIds = {};
   bool _isLoading = false;
   String? _errorMessage;
@@ -16,18 +18,12 @@ class TerrainProvider with ChangeNotifier {
   // Filters
   String _searchQuery = '';
   String? _filterVille;
-  DocumentType? _filterDocumentType;
-  TerrainStatus? _filterStatus;
-  VerificationFoncira? _filterVerification;
+  String? _filterDocumentType;
   double? _filterMinPrice;
   double? _filterMaxPrice;
-  double? _filterMinSurface;
-  double? _filterMaxSurface;
 
-  List<Terrain> get terrains => _filteredTerrains;
-  List<Terrain> get allTerrains => _terrains;
-  List<Terrain> get favorites =>
-      _terrains.where((t) => _favoriteIds.contains(t.id)).toList();
+  List<Map<String, dynamic>> get terrains => _filteredTerrains;
+  List<Map<String, dynamic>> get allTerrains => _terrains;
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   String get searchQuery => _searchQuery;
@@ -36,126 +32,108 @@ class TerrainProvider with ChangeNotifier {
     loadTerrains();
   }
 
-  void loadTerrains() {
+  Future<void> loadTerrains() async {
     _isLoading = true;
+    _errorMessage = null;
     notifyListeners();
 
-    // Load mock data
-    _terrains = List.from(terrainsFoncira);
-    _applyFilters();
-
-    _isLoading = false;
-    notifyListeners();
+    try {
+      _terrains = await _terrainService.getTerrains();
+      _applyFilters();
+    } catch (e) {
+      _errorMessage = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   // ── Search ─────────────────────────────────────────────────
-  void search(String query) {
+  Future<void> search(String query) async {
     _searchQuery = query;
-    _applyFilters();
+
+    if (query.isEmpty) {
+      _applyFilters();
+      return;
+    }
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      _terrains = await _terrainService.searchTerrains(query);
+      _applyFilters();
+    } catch (e) {
+      _errorMessage = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   // ── Filters ────────────────────────────────────────────────
-  void setFilterVille(String? ville) {
+  Future<void> setFilterVille(String? ville) async {
     _filterVille = ville;
-    _applyFilters();
+    await _reloadWithFilters();
   }
 
-  void setFilterDocumentType(DocumentType? type) {
+  Future<void> setFilterDocumentType(String? type) async {
     _filterDocumentType = type;
-    _applyFilters();
+    await _reloadWithFilters();
   }
 
-  void setFilterStatus(TerrainStatus? status) {
-    _filterStatus = status;
-    _applyFilters();
-  }
-
-  void setFilterVerification(VerificationFoncira? v) {
-    _filterVerification = v;
-    _applyFilters();
-  }
-
-  void setFilterPriceRange(double? min, double? max) {
+  Future<void> setFilterPriceRange(double? min, double? max) async {
     _filterMinPrice = min;
     _filterMaxPrice = max;
-    _applyFilters();
+    await _reloadWithFilters();
   }
 
-  void setFilterSurfaceRange(double? min, double? max) {
-    _filterMinSurface = min;
-    _filterMaxSurface = max;
-    _applyFilters();
-  }
-
-  void clearFilters() {
+  Future<void> clearFilters() async {
     _searchQuery = '';
     _filterVille = null;
     _filterDocumentType = null;
-    _filterStatus = null;
-    _filterVerification = null;
     _filterMinPrice = null;
     _filterMaxPrice = null;
-    _filterMinSurface = null;
-    _filterMaxSurface = null;
-    _applyFilters();
+    await loadTerrains();
   }
 
   bool get hasActiveFilters =>
       _searchQuery.isNotEmpty ||
       _filterVille != null ||
       _filterDocumentType != null ||
-      _filterStatus != null ||
-      _filterVerification != null ||
       _filterMinPrice != null ||
-      _filterMaxPrice != null ||
-      _filterMinSurface != null ||
-      _filterMaxSurface != null;
+      _filterMaxPrice != null;
+
+  Future<void> _reloadWithFilters() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      _terrains = await _terrainService.getTerrains(
+        ville: _filterVille,
+        documentType: _filterDocumentType,
+        minPrice: _filterMinPrice,
+        maxPrice: _filterMaxPrice,
+      );
+      _applyFilters();
+    } catch (e) {
+      _errorMessage = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
 
   void _applyFilters() {
     _filteredTerrains = _terrains.where((t) {
       // Search query
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
-        final matches = t.title.toLowerCase().contains(q) ||
-            t.location.toLowerCase().contains(q) ||
-            t.quartier.toLowerCase().contains(q) ||
-            t.ville.toLowerCase().contains(q) ||
-            t.zone.toLowerCase().contains(q) ||
-            (t.description?.toLowerCase().contains(q) ?? false);
+        final title = (t['title'] ?? '').toString().toLowerCase();
+        final location = (t['location'] ?? '').toString().toLowerCase();
+        final matches = title.contains(q) || location.contains(q);
         if (!matches) return false;
       }
-
-      // City filter
-      if (_filterVille != null && t.ville != _filterVille) return false;
-
-      // Document type filter
-      if (_filterDocumentType != null && t.documentType != _filterDocumentType) {
-        return false;
-      }
-
-      // Status filter
-      if (_filterStatus != null && t.terrainStatus != _filterStatus) {
-        return false;
-      }
-
-      // Verification filter
-      if (_filterVerification != null &&
-          t.verificationFoncira != _filterVerification) {
-        return false;
-      }
-
-      // Price range
-      if (_filterMinPrice != null && t.price < _filterMinPrice!) return false;
-      if (_filterMaxPrice != null && t.price > _filterMaxPrice!) return false;
-
-      // Surface range
-      if (_filterMinSurface != null && t.surface < _filterMinSurface!) {
-        return false;
-      }
-      if (_filterMaxSurface != null && t.surface > _filterMaxSurface!) {
-        return false;
-      }
-
       return true;
     }).toList();
 
@@ -175,28 +153,28 @@ class TerrainProvider with ChangeNotifier {
   }
 
   // ── Getters ────────────────────────────────────────────────
-  Terrain? getTerrainById(String id) {
+  Map<String, dynamic>? getTerrainById(String id) {
     try {
-      return _terrains.firstWhere((t) => t.id == id);
+      return _terrains.firstWhere((t) => t['id'] == id);
     } catch (e) {
       return null;
     }
   }
 
-  List<Terrain> get verifiedTerrains => _terrains
-      .where((t) =>
-          t.verificationFoncira == VerificationFoncira.verifieFaibleRisque ||
-          t.verificationFoncira == VerificationFoncira.verifieMoyenRisque)
-      .toList();
-
-  List<Terrain> get recentTerrains {
-    final sorted = List<Terrain>.from(_terrains);
-    sorted.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    return sorted.take(5).toList();
+  Future<List<String>> getAvailableVilles() async {
+    try {
+      return await _terrainService.getAvailableVilles();
+    } catch (e) {
+      return [];
+    }
   }
 
-  List<String> get availableCities {
-    return _terrains.map((t) => t.ville).toSet().toList()..sort();
+  Future<Map<String, double>> getPriceRange() async {
+    try {
+      return await _terrainService.getPriceRange();
+    } catch (e) {
+      return {'min': 0, 'max': 10000000};
+    }
   }
 
   void clearError() {
@@ -204,26 +182,29 @@ class TerrainProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Create Terrain (legacy support) ───────────────────────
-  Future<Terrain?> createTerrain(Terrain terrain) async {
-    _isLoading = true;
-    notifyListeners();
+  // ── Additional getters (for compatibility) ─────────────────
+  List<Map<String, dynamic>> get verifiedTerrains => _terrains
+      .where(
+        (t) =>
+            t['status'] == 'verified' ||
+            t['status'] == 'available' ||
+            (t['status'] ?? '').toString().toLowerCase().contains('verif'),
+      )
+      .toList();
 
-    try {
-      // TODO: Replace with actual Supabase insert
-      final newTerrain = terrain.copyWith(
-        id: 'T${DateTime.now().millisecondsSinceEpoch}',
-      );
-      _terrains.add(newTerrain);
-      _applyFilters();
-      _isLoading = false;
-      notifyListeners();
-      return newTerrain;
-    } catch (e) {
-      _errorMessage = e.toString();
-      _isLoading = false;
-      notifyListeners();
-      return null;
-    }
+  List<Map<String, dynamic>> get recentTerrains {
+    if (_terrains.isEmpty) return [];
+    final sorted = List<Map<String, dynamic>>.from(_terrains);
+    sorted.sort((a, b) {
+      final dateA = a['created_at'] ?? DateTime.now().toIso8601String();
+      final dateB = b['created_at'] ?? DateTime.now().toIso8601String();
+      return DateTime.parse(
+        dateB.toString(),
+      ).compareTo(DateTime.parse(dateA.toString()));
+    });
+    return sorted.take(6).toList();
   }
+
+  List<Map<String, dynamic>> get favorites =>
+      _terrains.where((t) => _favoriteIds.contains(t['id'])).toList();
 }

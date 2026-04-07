@@ -38,7 +38,10 @@ class _ProfilState extends State<Profil> {
     final prefs = await SharedPreferences.getInstance();
     final user = Supabase.instance.client.auth.currentUser;
     setState(() {
-      _userName = prefs.getString('name') ?? user?.email?.split('@').first ?? 'Utilisateur';
+      _userName =
+          prefs.getString('name') ??
+          user?.email?.split('@').first ??
+          'Utilisateur';
       _email = user?.email ?? '';
       final path = prefs.getString('profileImagePath');
       if (path != null) _image = File(path);
@@ -61,6 +64,7 @@ class _ProfilState extends State<Profil> {
           child: Column(
             children: [
               const SizedBox(height: 16),
+              const SizedBox(height: 24),
 
               // ── Avatar ──
               Container(
@@ -74,8 +78,11 @@ class _ProfilState extends State<Profil> {
                   backgroundColor: kDarkCard,
                   backgroundImage: _image != null ? FileImage(_image!) : null,
                   child: _image == null
-                      ? const Icon(Icons.person_rounded,
-                          color: kTextMuted, size: 40)
+                      ? const Icon(
+                          Icons.person_rounded,
+                          color: kTextMuted,
+                          size: 40,
+                        )
                       : null,
                 ),
               ),
@@ -92,15 +99,14 @@ class _ProfilState extends State<Profil> {
               const SizedBox(height: 4),
               Text(
                 _email,
-                style: GoogleFonts.inter(
-                  color: kTextMuted,
-                  fontSize: 13,
-                ),
+                style: GoogleFonts.inter(color: kTextMuted, fontSize: 13),
               ),
               const SizedBox(height: 8),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: kGoldSurface,
                   borderRadius: BorderRadius.circular(8),
@@ -123,9 +129,7 @@ class _ProfilState extends State<Profil> {
                 kPrimaryLight,
                 () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const MarketplacePage(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const MarketplacePage()),
                 ),
               ),
               _buildMenuItem(
@@ -156,9 +160,7 @@ class _ProfilState extends State<Profil> {
                 kDanger,
                 () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const FavorisPageFoncira(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const FavorisPageFoncira()),
                 ),
               ),
               const SizedBox(height: 8),
@@ -170,9 +172,7 @@ class _ProfilState extends State<Profil> {
                 kTextMuted,
                 () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const SettingsPage(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const SettingsPage()),
                 ),
               ),
               _buildMenuItem(
@@ -181,9 +181,7 @@ class _ProfilState extends State<Profil> {
                 kTextMuted,
                 () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const HelpSupportPage(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const HelpSupportPage()),
                 ),
               ),
               _buildMenuItem(
@@ -192,9 +190,7 @@ class _ProfilState extends State<Profil> {
                 kTextMuted,
                 () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const AboutFonciraPage(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const AboutFonciraPage()),
                 ),
               ),
               const SizedBox(height: 8),
@@ -211,10 +207,7 @@ class _ProfilState extends State<Profil> {
               // ── Version ──
               Text(
                 'FONCIRA v1.0.0',
-                style: GoogleFonts.inter(
-                  color: kTextMuted,
-                  fontSize: 11,
-                ),
+                style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
               ),
               const SizedBox(height: 40),
             ],
@@ -225,7 +218,11 @@ class _ProfilState extends State<Profil> {
   }
 
   Widget _buildMenuItem(
-      IconData icon, String label, Color color, VoidCallback onTap) {
+    IconData icon,
+    String label,
+    Color color,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -273,9 +270,7 @@ class _ProfilState extends State<Profil> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: kDarkCard,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
           'Se déconnecter',
           style: GoogleFonts.outfit(
@@ -285,18 +280,12 @@ class _ProfilState extends State<Profil> {
         ),
         content: Text(
           'Voulez-vous vraiment vous déconnecter ?',
-          style: GoogleFonts.inter(
-            color: kTextSecondary,
-            fontSize: 14,
-          ),
+          style: GoogleFonts.inter(color: kTextSecondary, fontSize: 14),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(
-              'Annuler',
-              style: GoogleFonts.inter(color: kTextMuted),
-            ),
+            child: Text('Annuler', style: GoogleFonts.inter(color: kTextMuted)),
           ),
           TextButton(
             onPressed: () {
