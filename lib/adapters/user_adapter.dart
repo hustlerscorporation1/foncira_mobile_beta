@@ -1,6 +1,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 class UserAdapter {
+  String? get _oauthRedirect {
+    if (kIsWeb) return null;
+    return 'io.supabase.flutter://login-callback';
+  }
+
   // inscription par email/password
   Future signUp(String email, String password) async {
     final response = await Supabase.instance.client.auth.signUp(
@@ -23,7 +29,7 @@ class UserAdapter {
   Future<bool> signInWithGoogle() async {
     return await Supabase.instance.client.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: 'io.supabase.flutter://login-callback',
+      redirectTo: _oauthRedirect,
     );
   }
 
@@ -31,6 +37,7 @@ class UserAdapter {
   Future<bool> signInWithApple() async {
     return await Supabase.instance.client.auth.signInWithOAuth(
       OAuthProvider.apple,
+      redirectTo: _oauthRedirect,
     );
   }
 }

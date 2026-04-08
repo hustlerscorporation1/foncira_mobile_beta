@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import '../models/terrain.dart';
 import '../services/terrain_service.dart';
 
 // ══════════════════════════════════════════════════════════════
@@ -53,7 +52,7 @@ class TerrainProvider with ChangeNotifier {
     _searchQuery = query;
 
     if (query.isEmpty) {
-      _applyFilters();
+      await _reloadWithFilters();
       return;
     }
 
@@ -186,9 +185,17 @@ class TerrainProvider with ChangeNotifier {
   List<Map<String, dynamic>> get verifiedTerrains => _terrains
       .where(
         (t) =>
-            t['status'] == 'verified' ||
-            t['status'] == 'available' ||
-            (t['status'] ?? '').toString().toLowerCase().contains('verif'),
+            (t['status'] ?? '').toString().toLowerCase() == 'publie' &&
+            ((t['verification_status'] ?? '').toString().toLowerCase() ==
+                    'verification_base_effectuee' ||
+                (t['verification_status'] ?? '').toString().toLowerCase() ==
+                    'verification_complete' ||
+                (t['verification_status'] ?? '').toString().toLowerCase() ==
+                    'risque_identifie' ||
+                (t['verification_status'] ?? '')
+                    .toString()
+                    .toLowerCase()
+                    .contains('verif')),
       )
       .toList();
 

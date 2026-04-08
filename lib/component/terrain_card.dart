@@ -59,20 +59,10 @@ class TerrainCard extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(18),
                   ),
-                  child: Image.asset(
+                  child: _buildTerrainImage(
                     terrain.imageUrl,
                     height: 130,
                     width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      height: 130,
-                      color: kDarkCardLight,
-                      child: const Icon(
-                        Icons.landscape_rounded,
-                        color: kTextMuted,
-                        size: 40,
-                      ),
-                    ),
                   ),
                 ),
                 // Surface badge
@@ -224,21 +214,10 @@ class TerrainCard extends StatelessWidget {
                   borderRadius: const BorderRadius.horizontal(
                     left: Radius.circular(18),
                   ),
-                  child: Image.asset(
+                  child: _buildTerrainImage(
                     terrain.imageUrl,
                     width: 130,
                     height: 130,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      width: 130,
-                      height: 130,
-                      color: kDarkCardLight,
-                      child: const Icon(
-                        Icons.landscape_rounded,
-                        color: kTextMuted,
-                        size: 32,
-                      ),
-                    ),
                   ),
                 ),
                 Positioned(
@@ -404,5 +383,39 @@ class TerrainCard extends StatelessWidget {
       case DocumentType.aucunDocument:
         return kDanger;
     }
+  }
+
+  Widget _buildTerrainImage(String imagePath, {double? width, double? height}) {
+    final isNetworkImage =
+        imagePath.startsWith('http://') || imagePath.startsWith('https://');
+
+    if (isNetworkImage) {
+      return Image.network(
+        imagePath,
+        width: width,
+        height: height,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            _buildImageFallback(width: width, height: height),
+      );
+    }
+
+    return Image.asset(
+      imagePath,
+      width: width,
+      height: height,
+      fit: BoxFit.cover,
+      errorBuilder: (_, __, ___) =>
+          _buildImageFallback(width: width, height: height),
+    );
+  }
+
+  Widget _buildImageFallback({double? width, double? height}) {
+    return Container(
+      width: width,
+      height: height,
+      color: kDarkCardLight,
+      child: const Icon(Icons.landscape_rounded, color: kTextMuted, size: 36),
+    );
   }
 }

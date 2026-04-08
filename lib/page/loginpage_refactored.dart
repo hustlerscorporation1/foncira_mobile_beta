@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -52,10 +53,48 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _signInWithSocial(Future<bool> Function() callback) async {
     setState(() => _isLoading = true);
-    final success = await callback();
-    if (!mounted) return;
-    if (success) Navigator.pushReplacementNamed(context, '/home');
-    if (mounted) setState(() => _isLoading = false);
+    try {
+      final launched = await callback();
+      if (!mounted) return;
+
+      if (!launched) {
+        _showError('Échec du lancement de la connexion sociale');
+        return;
+      }
+
+      final auth = Supabase.instance.client.auth;
+      if (auth.currentSession == null) {
+        final completer = Completer<void>();
+        late final StreamSubscription<AuthState> sub;
+        sub = auth.onAuthStateChange.listen((state) {
+          if (state.session != null && !completer.isCompleted) {
+            completer.complete();
+          }
+        });
+
+        try {
+          await completer.future.timeout(const Duration(seconds: 20));
+        } catch (_) {
+          if (mounted) {
+            _showError(
+              'Connexion sociale incomplète. Vérifiez le callback et réessayez.',
+            );
+          }
+          await sub.cancel();
+          return;
+        }
+        await sub.cancel();
+      }
+
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, '/home');
+    } catch (e) {
+      if (mounted) {
+        _showError('Erreur de connexion sociale: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _showError(String message) {

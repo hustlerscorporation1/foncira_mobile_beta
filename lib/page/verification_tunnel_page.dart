@@ -58,7 +58,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
         widget.initialState ??
         VerificationState(
           localisation: '',
-          typeDocument: null,
+          typeDocuments: const [],
           prixFCFA: 0,
           niveauRisque: NiveauRisque.faible,
         );
@@ -92,9 +92,11 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
       return;
     }
 
-    if (state.typeDocument == null) {
+    if (state.typeDocuments.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sélectionnez un type de document')),
+        const SnackBar(
+          content: Text('Sélectionnez au moins un type de document'),
+        ),
       );
       return;
     }
@@ -110,7 +112,9 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
         int.tryParse(priceController.text.replaceAll(' ', '')) ?? 0;
     if (prixFCFA == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Le prix doit être supérieur à 0')),
+        const SnackBar(
+          content: Text('Le prix doit être supérieur à 0'),
+        ),
       );
       return;
     }
@@ -120,7 +124,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
         localisation: localisationController.text,
         prixFCFA: prixFCFA,
         prixUSD: VerificationState.convertToUSD(prixFCFA),
-        niveauRisque: VerificationState.calculateRisk(state.typeDocument),
+        niveauRisque: VerificationState.calculateRisk(state.typeDocuments),
         lienPartage: lienPartageController.text,
         documents: uploadedDocuments,
       );
@@ -163,9 +167,9 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
 
   void _submitPayment(String method) async {
     if (!SupabaseService().isAuthenticated) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Vous devez être connecté')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vous devez être connecté')),
+      );
       return;
     }
 
@@ -181,7 +185,9 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
           title: state.localisation,
           location: state.localisation,
           price: state.prixFCFA.toDouble(),
-          documentType: state.typeDocument?.toString(),
+          documentType: state.typeDocuments.isNotEmpty
+              ? state.typeDocuments.map((e) => e.label).join(', ')
+              : 'N/A',
           sharingLink: state.lienPartage,
         );
       } else {
@@ -191,7 +197,9 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
           terrainTitle: state.terrainTitre ?? state.localisation,
           terrainLocation: state.localisation,
           terrainPrice: state.prixFCFA.toDouble(),
-          documentType: state.typeDocument?.toString(),
+          documentType: state.typeDocuments.isNotEmpty
+              ? state.typeDocuments.map((e) => e.label).join(', ')
+              : 'N/A',
           sharingLink: state.lienPartage,
         );
       }
@@ -338,9 +346,18 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
             localisationController: localisationController,
             priceController: priceController,
             lienPartageController: lienPartageController,
-            selectedDocumentType: state.typeDocument,
-            onDocumentTypeChanged: (type) =>
-                setState(() => state = state.copyWith(typeDocument: type)),
+            selectedDocumentTypes: state.typeDocuments,
+            onDocumentTypeChanged: (type) {
+              setState(() {
+                final list = List<TypeDocument>.from(state.typeDocuments);
+                if (list.contains(type)) {
+                  list.remove(type);
+                } else {
+                  list.add(type);
+                }
+                state = state.copyWith(typeDocuments: list);
+              });
+            },
             onSubmit: _submitScreen1,
             isLoading: isLoadingPreAnalysis,
             uploadedDocuments: uploadedDocuments,
@@ -422,7 +439,7 @@ class _Screen1Terrain extends StatefulWidget {
   final TextEditingController localisationController;
   final TextEditingController priceController;
   final TextEditingController lienPartageController;
-  final TypeDocument? selectedDocumentType;
+  final List<TypeDocument> selectedDocumentTypes;
   final Function(TypeDocument) onDocumentTypeChanged;
   final VoidCallback onSubmit;
   final bool isLoading;
@@ -434,7 +451,7 @@ class _Screen1Terrain extends StatefulWidget {
     required this.localisationController,
     required this.priceController,
     required this.lienPartageController,
-    required this.selectedDocumentType,
+    required this.selectedDocumentTypes,
     required this.onDocumentTypeChanged,
     required this.onSubmit,
     required this.isLoading,
@@ -617,6 +634,7 @@ class __Screen1TerrainState extends State<_Screen1Terrain> {
             spacing: 10,
             runSpacing: 10,
             children: TypeDocument.values.map((doc) {
+              final isSelected = widget.selectedDocumentTypes.contains(doc);
               return GestureDetector(
                 onTap: () => widget.onDocumentTypeChanged(doc),
                 child: Container(
@@ -625,14 +643,10 @@ class __Screen1TerrainState extends State<_Screen1Terrain> {
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
-                    color: widget.selectedDocumentType == doc
-                        ? kPrimary
-                        : kDarkCard,
+                    color: isSelected ? kPrimary : kDarkCard,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: widget.selectedDocumentType == doc
-                          ? kPrimary
-                          : kBorderDark,
+                      color: isSelected ? kPrimary : kBorderDark,
                     ),
                   ),
                   child: Text(
@@ -640,9 +654,7 @@ class __Screen1TerrainState extends State<_Screen1Terrain> {
                     style: GoogleFonts.inter(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: widget.selectedDocumentType == doc
-                          ? Colors.white
-                          : kTextSecondary,
+                      color: isSelected ? Colors.white : kTextSecondary,
                     ),
                   ),
                 ),
@@ -650,9 +662,11 @@ class __Screen1TerrainState extends State<_Screen1Terrain> {
             }).toList(),
           ),
 
-          // Warning banner if risky document
-          if (widget.selectedDocumentType == TypeDocument.aucunDocument ||
-              widget.selectedDocumentType == TypeDocument.neSaisPas)
+          // Warning banner if risky document selected
+          if (widget.selectedDocumentTypes.contains(
+                TypeDocument.aucunDocument,
+              ) ||
+              widget.selectedDocumentTypes.contains(TypeDocument.neSaisPas))
             Padding(
               padding: const EdgeInsets.only(top: 16),
               child: Container(
@@ -1012,16 +1026,25 @@ class _Screen2PreAnalysis extends StatelessWidget {
     final points = <String>[];
 
     // Based on document type
-    if (state.typeDocument == TypeDocument.titreFoncier) {
+    if ((state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) ==
+        TypeDocument.titreFoncier) {
       points.add(
         'Un titre foncier est présent — c\'est le document le plus solide qui existe au Togo.',
       );
-    } else if (state.typeDocument == TypeDocument.convention) {
+    } else if ((state.typeDocuments.isNotEmpty
+            ? state.typeDocuments.first
+            : null) ==
+        TypeDocument.convention) {
       points.add(
         'La convention signée prouve une intention d\'achat formalisée.',
       );
-    } else if (state.typeDocument == TypeDocument.recuVente) {
-      points.add('Un reçu de vente documenta une transaction antérieure.');
+    } else if ((state.typeDocuments.isNotEmpty
+            ? state.typeDocuments.first
+            : null) ==
+        TypeDocument.recuVente) {
+      points.add(
+        'Un reçu de vente documenta une transaction antérieure.',
+      );
     }
 
     // Based on documents uploaded
@@ -1050,26 +1073,38 @@ class _Screen2PreAnalysis extends StatelessWidget {
     final points = <String>[];
 
     // Based on document type
-    if (state.typeDocument == TypeDocument.aucunDocument ||
-        state.typeDocument == TypeDocument.neSaisPas) {
+    if ((state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) ==
+            TypeDocument.aucunDocument ||
+        (state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) ==
+            TypeDocument.neSaisPas) {
       points.add(
         'L\'absence de document officiel expose à un risque important.',
       );
-      points.add('Une vérification terrains et coutumière est essentielle.');
-    } else if (state.typeDocument == TypeDocument.convention) {
+      points.add(
+        'Une vérification terrains et coutumière est essentielle.',
+      );
+    } else if ((state.typeDocuments.isNotEmpty
+            ? state.typeDocuments.first
+            : null) ==
+        TypeDocument.convention) {
       points.add(
         'Une convention sans enregistrement notarial n\'a pas de valeur juridique pleine.',
       );
       points.add('L\'absence de titre foncier doit être clarifiée.');
-    } else if (state.typeDocument == TypeDocument.logement ||
-        state.typeDocument == TypeDocument.recuVente) {
+    } else if ((state.typeDocuments.isNotEmpty
+                ? state.typeDocuments.first
+                : null) ==
+            TypeDocument.logement ||
+        (state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) ==
+            TypeDocument.recuVente) {
       points.add(
         'Le statut d\'enregistrement auprès des autorités cadastrales doit être confirmé.',
       );
     }
 
     // Additional verification points
-    if (state.typeDocument != TypeDocument.titreFoncier) {
+    if ((state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) !=
+        TypeDocument.titreFoncier) {
       points.add(
         'L\'absence de bornage officiel expose à des litiges de délimitation.',
       );
@@ -2158,7 +2193,9 @@ class _Screen7Report extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emoji = state.niveauRisque == NiveauRisque.faible ? '🟢' : '🔴';
+    final emoji = state.niveauRisque == NiveauRisque.faible
+        ? '🟢'
+        : '🔴';
     final verdict = state.niveauRisque == NiveauRisque.faible
         ? 'Risque faible — Tu peux y aller'
         : 'Risque élevé — On t\'explique pourquoi';
@@ -2308,7 +2345,12 @@ class _Screen8Decision extends StatelessWidget {
               'Aide Administrative avec notaire',
               'support',
             ),
-            ('⏰', 'Pas maintenant', 'Voir d\'autres terrains vérifiés', 'skip'),
+            (
+              '⏰',
+              'Pas maintenant',
+              'Voir d\'autres terrains vérifiés',
+              'skip',
+            ),
           ].map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -2419,7 +2461,10 @@ class __Screen9ReferralState extends State<_Screen9Referral> {
                       ),
                       child: Column(
                         children: [
-                          Text('😍', style: GoogleFonts.outfit(fontSize: 32)),
+                          Text(
+                            '😍',
+                            style: GoogleFonts.outfit(fontSize: 32),
+                          ),
                           const SizedBox(height: 8),
                           Text(
                             'Ravi',
@@ -2453,7 +2498,10 @@ class __Screen9ReferralState extends State<_Screen9Referral> {
                       ),
                       child: Column(
                         children: [
-                          Text('😐', style: GoogleFonts.outfit(fontSize: 32)),
+                          Text(
+                            '😐',
+                            style: GoogleFonts.outfit(fontSize: 32),
+                          ),
                           const SizedBox(height: 8),
                           Text(
                             'Moyen',
@@ -2487,7 +2535,10 @@ class __Screen9ReferralState extends State<_Screen9Referral> {
                       ),
                       child: Column(
                         children: [
-                          Text('😞', style: GoogleFonts.outfit(fontSize: 32)),
+                          Text(
+                            '😞',
+                            style: GoogleFonts.outfit(fontSize: 32),
+                          ),
                           const SizedBox(height: 8),
                           Text(
                             'Non',

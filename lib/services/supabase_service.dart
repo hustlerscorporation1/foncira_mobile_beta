@@ -97,11 +97,20 @@ class SupabaseService {
   Future<Map<String, dynamic>?> getCurrentUserData() async {
     if (!isAuthenticated) return null;
     try {
-      final response = await client
-          .from('users')
-          .select('*')
-          .eq('id', currentUserId!)
-          .single();
+      dynamic response;
+      try {
+        response = await client
+            .from('users')
+            .select('*')
+            .eq('auth_id', currentUserId!)
+            .single();
+      } catch (_) {
+        response = await client
+            .from('users')
+            .select('*')
+            .eq('id', currentUserId!)
+            .single();
+      }
       return response;
     } catch (e) {
       return null;

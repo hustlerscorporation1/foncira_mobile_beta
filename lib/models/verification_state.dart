@@ -40,7 +40,7 @@ enum NiveauRisque {
 class VerificationState {
   // Terrain data
   String localisation;
-  TypeDocument? typeDocument;
+  List<TypeDocument> typeDocuments; // Multiple document types
   int prixFCFA;
   int prixUSD;
   String lienPartage; // Sharing link (optional)
@@ -62,9 +62,14 @@ class VerificationState {
   String agentPhoto; // Asset path
   DateTime? dateLivraison;
 
+  // Backward-compatible view for legacy single-document code paths.
+  TypeDocument? get typeDocument =>
+      typeDocuments.isNotEmpty ? typeDocuments.first : null;
+
   VerificationState({
     this.localisation = '',
-    this.typeDocument,
+    List<TypeDocument>? typeDocuments,
+    TypeDocument? typeDocument,
     this.prixFCFA = 0,
     this.prixUSD = 0,
     this.lienPartage = '',
@@ -79,22 +84,28 @@ class VerificationState {
     this.agentNom = 'Kofi Mensah',
     this.agentPhoto = 'assets/agent_placeholder.png',
     this.dateLivraison,
-  });
+  }) : typeDocuments =
+           typeDocuments ?? (typeDocument != null ? [typeDocument] : const []);
 
-  // Calculate risk based on document type
-  static NiveauRisque calculateRisk(TypeDocument? type) {
-    if (type == null) return NiveauRisque.faible;
-    switch (type) {
-      case TypeDocument.titreFoncier:
-        return NiveauRisque.faible;
-      case TypeDocument.aucunDocument:
-      case TypeDocument.neSaisPas:
-        return NiveauRisque.eleve;
-      case TypeDocument.logement:
-      case TypeDocument.convention:
-      case TypeDocument.recuVente:
-        return NiveauRisque.modere;
+  // Calculate risk based on document types (highest risk wins)
+  static NiveauRisque calculateRisk(List<TypeDocument> types) {
+    if (types.isEmpty) return NiveauRisque.faible;
+
+    // Check for high risk first
+    if (types.contains(TypeDocument.aucunDocument) ||
+        types.contains(TypeDocument.neSaisPas)) {
+      return NiveauRisque.eleve;
     }
+
+    // Check for moderate risk
+    if (types.contains(TypeDocument.logement) ||
+        types.contains(TypeDocument.convention) ||
+        types.contains(TypeDocument.recuVente)) {
+      return NiveauRisque.modere;
+    }
+
+    // Default to low risk (titre foncier or others)
+    return NiveauRisque.faible;
   }
 
   // Convert FCFA to USD using centralized rate
@@ -106,7 +117,7 @@ class VerificationState {
   // Copy with
   VerificationState copyWith({
     String? localisation,
-    TypeDocument? typeDocument,
+    List<TypeDocument>? typeDocuments,
     int? prixFCFA,
     int? prixUSD,
     String? lienPartage,
@@ -124,7 +135,7 @@ class VerificationState {
   }) {
     return VerificationState(
       localisation: localisation ?? this.localisation,
-      typeDocument: typeDocument ?? this.typeDocument,
+      typeDocuments: typeDocuments ?? this.typeDocuments,
       prixFCFA: prixFCFA ?? this.prixFCFA,
       prixUSD: prixUSD ?? this.prixUSD,
       lienPartage: lienPartage ?? this.lienPartage,

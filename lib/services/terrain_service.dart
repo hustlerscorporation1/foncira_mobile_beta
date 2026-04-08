@@ -1,13 +1,51 @@
 import 'supabase_service.dart';
 
-// ══════════════════════════════════════════════════════════════
-//  FONCIRA — Terrain Service
-// ══════════════════════════════════════════════════════════════
-
 class TerrainService {
   final SupabaseService _supabase = SupabaseService();
 
-  // ── Get all terrains with filters ──────────────────────────
+  Map<String, dynamic> _normalizeTerrain(Map<String, dynamic> row) {
+    final map = Map<String, dynamic>.from(row);
+    final photoUrl =
+        map['main_photo_url'] ?? _extractFirstPhotoUrl(map['additional_photos']);
+
+    final priceValue = map['price'] ?? map['price_fcfa'];
+    final surfaceValue = map['surface'] ?? map['surface_m2'];
+
+    map['price'] = priceValue is num
+        ? priceValue
+        : num.tryParse(priceValue?.toString() ?? '') ?? 0;
+    map['price_fcfa'] = map['price_fcfa'] ?? map['price'];
+    map['surface'] = surfaceValue is num
+        ? surfaceValue
+        : num.tryParse(surfaceValue?.toString() ?? '') ?? 0;
+    map['photo_url'] = map['photo_url'] ?? photoUrl;
+    map['surface_m2'] = map['surface_m2'] ?? map['surface'];
+    map['city'] = map['city'] ?? map['ville'];
+    map['location'] = map['location'] ?? map['ville'] ?? '';
+
+    return map;
+  }
+
+  String? _extractFirstPhotoUrl(dynamic additionalPhotos) {
+    if (additionalPhotos == null) return null;
+
+    if (additionalPhotos is List && additionalPhotos.isNotEmpty) {
+      final first = additionalPhotos.first;
+      if (first is String && first.isNotEmpty) return first;
+      if (first is Map) {
+        final url = first['url'] ?? first['photo_url'];
+        if (url is String && url.isNotEmpty) return url;
+      }
+    }
+
+    if (additionalPhotos is Map) {
+      final url = additionalPhotos['url'] ?? additionalPhotos['photo_url'];
+      if (url is String && url.isNotEmpty) return url;
+    }
+
+    return null;
+  }
+
   Future<List<Map<String, dynamic>>> getTerrains({
     String? ville,
     String? documentType,
@@ -21,7 +59,8 @@ class TerrainService {
       var query = _supabase.client
           .from('terrains_foncira')
           .select('*')
-          .eq('status', status ?? 'disponible');
+          .eq('status', status ?? 'publie')
+          .isFilter('deleted_at', null);
 
       if (ville != null && ville.isNotEmpty) {
         query = query.eq('ville', ville);
@@ -36,38 +75,56 @@ class TerrainService {
         query = query.lte('price_fcfa', maxPrice);
       }
       if (minSurface != null) {
-        query = query.gte('surface_m2', minSurface);
+        query = query.gte('surface', minSurface);
       }
       if (maxSurface != null) {
-        query = query.lte('surface_m2', maxSurface);
+        query = query.lte('surface', maxSurface);
       }
 
-      final response = await query.order('created_at', ascending: false);
+      final response = await query
+          .order('published_at', ascending: false)
+          .order('created_at', ascending: false);
 
-      return List<Map<String, dynamic>>.from(response);
+      return (response as List)
+          .map((e) => _normalizeTerrain(Map<String, dynamic>.from(e)))
+          .toList();
     } catch (e) {
       throw Exception('Failed to get terrains: $e');
     }
   }
 
-  // ── Search terrains by title/location ──────────────────────
   Future<List<Map<String, dynamic>>> searchTerrains(String query) async {
     try {
+      final q = query.trim();
+      if (q.isEmpty) return getTerrains();
+
+      final escaped = q.replaceAll('%', '').replaceAll(',', ' ');
       final response = await _supabase.client
           .from('terrains_foncira')
           .select('*')
-          .textSearch('fts', query)
-          .eq('status', 'disponible')
+          .eq('status', 'publie')
+          .isFilter('deleted_at', null)
+          .or(
+            'title.ilike.%$escaped%,location.ilike.%$escaped%,ville.ilike.%$escaped%,quartier.ilike.%$escaped%',
+          )
+          .order('published_at', ascending: false)
           .order('created_at', ascending: false);
 
-      return List<Map<String, dynamic>>.from(response);
+      return (response as List)
+          .map((e) => _normalizeTerrain(Map<String, dynamic>.from(e)))
+          .toList();
     } catch (e) {
-      // Fallback to simple filter if full text search fails
-      return await getTerrains();
+      final terrains = await getTerrains();
+      final q = query.toLowerCase();
+      return terrains.where((terrain) {
+        final title = (terrain['title'] ?? '').toString().toLowerCase();
+        final location = (terrain['location'] ?? '').toString().toLowerCase();
+        final ville = (terrain['ville'] ?? '').toString().toLowerCase();
+        return title.contains(q) || location.contains(q) || ville.contains(q);
+      }).toList();
     }
   }
 
-  // ── Get single terrain ────────────────────────────────────
   Future<Map<String, dynamic>?> getTerrain(String terrainId) async {
     try {
       final response = await _supabase.client
@@ -76,25 +133,25 @@ class TerrainService {
           .eq('id', terrainId)
           .single();
 
-      return response;
+      return _normalizeTerrain(Map<String, dynamic>.from(response));
     } catch (e) {
       return null;
     }
   }
 
-  // ── Get available villes ──────────────────────────────────
   Future<List<String>> getAvailableVilles() async {
     try {
       final response = await _supabase.client
           .from('terrains_foncira')
           .select('ville')
-          .eq('status', 'disponible')
+          .eq('status', 'publie')
+          .isFilter('deleted_at', null)
           .order('ville', ascending: true);
 
       final villes = <String>{};
-      for (var item in response) {
+      for (final item in response) {
         if (item['ville'] != null) {
-          villes.add(item['ville']);
+          villes.add(item['ville'].toString());
         }
       }
       return villes.toList();
@@ -103,21 +160,30 @@ class TerrainService {
     }
   }
 
-  // ── Get price range ────────────────────────────────────────
   Future<Map<String, double>> getPriceRange() async {
     try {
       final response = await _supabase.client
           .from('terrains_foncira')
           .select('price_fcfa')
-          .eq('status', 'disponible');
+          .eq('status', 'publie')
+          .isFilter('deleted_at', null);
 
       if (response.isEmpty) {
         return {'min': 0, 'max': 10000000};
       }
 
       final prices = (response as List)
-          .map((e) => (e['price_fcfa'] as num).toDouble())
+          .map((e) => e['price_fcfa'])
+          .map((v) {
+            if (v is num) return v.toDouble();
+            return double.tryParse(v?.toString() ?? '');
+          })
+          .whereType<double>()
           .toList();
+
+      if (prices.isEmpty) {
+        return {'min': 0, 'max': 10000000};
+      }
       prices.sort();
 
       return {'min': prices.first, 'max': prices.last};
@@ -126,21 +192,30 @@ class TerrainService {
     }
   }
 
-  // ── Get surface range ───────────────────────────────────────
   Future<Map<String, double>> getSurfaceRange() async {
     try {
       final response = await _supabase.client
           .from('terrains_foncira')
-          .select('surface_m2')
-          .eq('status', 'disponible');
+          .select('surface')
+          .eq('status', 'publie')
+          .isFilter('deleted_at', null);
 
       if (response.isEmpty) {
         return {'min': 0, 'max': 10000};
       }
 
       final surfaces = (response as List)
-          .map((e) => (e['surface_m2'] as num).toDouble())
+          .map((e) => e['surface'])
+          .map((v) {
+            if (v is num) return v.toDouble();
+            return double.tryParse(v?.toString() ?? '');
+          })
+          .whereType<double>()
           .toList();
+
+      if (surfaces.isEmpty) {
+        return {'min': 0, 'max': 10000};
+      }
       surfaces.sort();
 
       return {'min': surfaces.first, 'max': surfaces.last};
@@ -149,21 +224,24 @@ class TerrainService {
     }
   }
 
-  // ── Get terrains for stream (real-time updates) ───────────
   Stream<List<Map<String, dynamic>>> getTerrainStream() {
     try {
       return _supabase.client
           .from('terrains_foncira')
           .stream(primaryKey: ['id'])
-          .eq('status', 'disponible')
+          .eq('status', 'publie')
           .order('created_at', ascending: false)
-          .map((maps) => List<Map<String, dynamic>>.from(maps));
+          .map(
+            (maps) => maps
+                .where((m) => m['deleted_at'] == null)
+                .map((e) => _normalizeTerrain(Map<String, dynamic>.from(e)))
+                .toList(),
+          );
     } catch (e) {
       return Stream.error('Failed to stream terrains: $e');
     }
   }
 
-  // ── Get document types ─────────────────────────────────────
   List<String> getDocumentTypes() {
     return [
       'titre_foncier',
@@ -175,8 +253,7 @@ class TerrainService {
     ];
   }
 
-  // ── Get status list ────────────────────────────────────────
   List<String> getTerrainStatuses() {
-    return ['disponible', 'en_cours_vente', 'reserve', 'verifie'];
+    return ['draft', 'publie', 'suspendu', 'vendu', 'archive'];
   }
 }

@@ -13,7 +13,8 @@ class UserModeProvider with ChangeNotifier {
 
   UserMode _currentMode = UserMode.buyer;
   bool _modeTooltipSeen = false;
-  late SharedPreferences _prefs;
+  SharedPreferences? _prefs;
+  Future<void>? _initFuture;
 
   UserMode get currentMode => _currentMode;
   bool get isBuyerMode => _currentMode == UserMode.buyer;
@@ -22,14 +23,15 @@ class UserModeProvider with ChangeNotifier {
   bool get sellerTooltipSeen => _modeTooltipSeen;
 
   UserModeProvider() {
-    _initializeMode();
+    _initFuture = _initializeMode();
   }
 
   Future<void> _initializeMode() async {
+    if (_prefs != null) return;
     _prefs = await SharedPreferences.getInstance();
 
     // Load saved mode
-    final savedMode = _prefs.getString(_modeKey);
+    final savedMode = _prefs!.getString(_modeKey);
     if (savedMode == 'seller') {
       _currentMode = UserMode.seller;
     } else {
@@ -37,26 +39,33 @@ class UserModeProvider with ChangeNotifier {
     }
 
     // Load tooltip state (mode badge tooltip)
-    _modeTooltipSeen = _prefs.getBool(_modeTooltipSeenKey) ?? false;
+    _modeTooltipSeen = _prefs!.getBool(_modeTooltipSeenKey) ?? false;
 
     notifyListeners();
   }
 
+  Future<void> _ensureInitialized() async {
+    _initFuture ??= _initializeMode();
+    await _initFuture;
+  }
+
   Future<void> switchMode(UserMode mode) async {
+    await _ensureInitialized();
     if (_currentMode == mode) return;
 
     _currentMode = mode;
 
     // Save mode preference
     final modeString = mode == UserMode.seller ? 'seller' : 'buyer';
-    await _prefs.setString(_modeKey, modeString);
+    await _prefs!.setString(_modeKey, modeString);
 
     notifyListeners();
   }
 
   Future<void> markModeTooltipSeen() async {
+    await _ensureInitialized();
     _modeTooltipSeen = true;
-    await _prefs.setBool(_modeTooltipSeenKey, true);
+    await _prefs!.setBool(_modeTooltipSeenKey, true);
     notifyListeners();
   }
 
@@ -65,10 +74,11 @@ class UserModeProvider with ChangeNotifier {
   }
 
   Future<void> resetMode() async {
+    await _ensureInitialized();
     _currentMode = UserMode.buyer;
     _modeTooltipSeen = false;
-    await _prefs.setString(_modeKey, 'buyer');
-    await _prefs.setBool(_modeTooltipSeenKey, false);
+    await _prefs!.setString(_modeKey, 'buyer');
+    await _prefs!.setBool(_modeTooltipSeenKey, false);
     notifyListeners();
   }
 }

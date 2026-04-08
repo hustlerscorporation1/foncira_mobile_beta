@@ -109,26 +109,44 @@ class PublishState {
 
   // ── Convert to Supabase JSON ──
   Map<String, dynamic> toSupabaseJson() {
+    // Calculate USD price from FCFA (approximate rate: 1 USD = 578 FCFA)
     return {
-      'titre': titre,
-      'localisation': localisation,
-      'superficie': superficie,
-      'prix_fcfa': prixFCFA,
-      'prix_usd': prixUSD,
-      'type_document': typeDocument != null
-          ? documentTypeToString(typeDocument)
-          : null,
+      'title': titre,
+      'location': localisation,
+      'surface': superficie,
+      'price_fcfa': prixFCFA,
+      'document_type': typeDocument != null
+          ? _getDocumentTypeValue(typeDocument!)
+          : 'aucun_document',
       'description': description,
-      'photos_urls': photoUrls,
-      'status': 'disponible',
-      'is_archived': false,
-      'is_featured': isFeatured,
-      'featured_at': isFeatured ? DateTime.now().toIso8601String() : null,
-      'views_count': 0,
-      'verification_requests_count': 0,
-      'direct_contacts_count': 0,
+      'main_photo_url': photoUrls.isNotEmpty ? photoUrls[0] : null,
+      'additional_photos': photoUrls.length > 1 ? photoUrls.sublist(1) : [],
+      'terrain_status': 'disponible',
+      'status': 'publie',
+      'is_viabilise': false,
+      'times_viewed': 0,
+      'times_inquired': 0,
+      'verification_status': 'non_verifie',
       'created_at': DateTime.now().toIso8601String(),
       'updated_at': DateTime.now().toIso8601String(),
     };
+  }
+
+  // ── Helper to convert DocumentType to database enum string ──
+  static String _getDocumentTypeValue(PublishDocumentType type) {
+    switch (type) {
+      case PublishDocumentType.titreFoncier:
+        return 'titre_foncier';
+      case PublishDocumentType.logement:
+        return 'logement';
+      case PublishDocumentType.convention:
+        return 'convention';
+      case PublishDocumentType.recuVente:
+        return 'recu_vente';
+      case PublishDocumentType.aucunDocument:
+        return 'aucun_document';
+      case PublishDocumentType.neSaisPas:
+        return 'ne_sais_pas';
+    }
   }
 }

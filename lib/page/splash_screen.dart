@@ -2,9 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/colors.dart';
+import '../providers/user_role_provider.dart';
+import '../services/role_based_navigation.dart';
 
 // ══════════════════════════════════════════════════════════════
 //  FONCIRA — Splash Screen (premium)
@@ -48,22 +51,50 @@ class _SplashPageState extends State<SplashPage>
     if (!mounted) return;
 
     final session = Supabase.instance.client.auth.currentSession;
-    String destination;
 
+    // Utilisateur non authentifié
     if (session == null) {
-      destination = '/onboarding';
-    } else {
-      destination = '/home';
+      setState(() => _isFadingOut = true);
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/onboarding');
+      }
+      return;
     }
 
-    setState(() {
-      _isFadingOut = true;
-    });
+    // Utilisateur authentifié: synchroniser le rôle
+    if (!mounted) return;
 
-    await Future.delayed(const Duration(milliseconds: 600));
+    try {
+      final userRoleProvider = context.read<UserRoleProvider>();
+      final success = await userRoleProvider.initializeUserRole();
 
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed(destination);
+      if (!mounted) return;
+
+      setState(() => _isFadingOut = true);
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      if (mounted) {
+        if (success && userRoleProvider.currentRole != null) {
+          // Navigue selon le rôle
+          await RoleBasedNavigation.navigateByRole(
+            context,
+            userRoleProvider.currentRole,
+            forceNavigation: true,
+          );
+        } else {
+          // En cas d'erreur, va au home par défaut
+          print(
+            '❌ [Splash] Erreur lors de la sync du rôle: ${userRoleProvider.errorMessage}',
+          );
+          Navigator.of(context).pushReplacementNamed('/home');
+        }
+      }
+    } catch (e) {
+      print('❌ [Splash] Exception: $e');
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
     }
   }
 
@@ -85,10 +116,7 @@ class _SplashPageState extends State<SplashPage>
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
-                    colors: [
-                      kPrimary.withOpacity(0.08),
-                      Colors.transparent,
-                    ],
+                    colors: [kPrimary.withOpacity(0.08), Colors.transparent],
                   ),
                 ),
               ),
@@ -100,10 +128,7 @@ class _SplashPageState extends State<SplashPage>
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Logo
-                  Image.asset(
-                    'assets/Image/FONCIRA.png',
-                    width: 140,
-                  )
+                  Image.asset('assets/Image/FONCIRA.png', width: 140)
                       .animate()
                       .fade(duration: 1200.ms, curve: Curves.easeIn)
                       .scale(
@@ -117,14 +142,14 @@ class _SplashPageState extends State<SplashPage>
 
                   // Tagline
                   Text(
-                    'Sécurisez votre terrain',
-                    style: GoogleFonts.inter(
-                      color: kTextSecondary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w400,
-                      letterSpacing: 1.5,
-                    ),
-                  )
+                        'Sécurisez votre terrain',
+                        style: GoogleFonts.inter(
+                          color: kTextSecondary,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 1.5,
+                        ),
+                      )
                       .animate()
                       .fade(duration: 800.ms, delay: 800.ms)
                       .slideY(begin: 0.3, curve: Curves.easeOut),
@@ -144,9 +169,7 @@ class _SplashPageState extends State<SplashPage>
                         );
                       },
                     ),
-                  )
-                      .animate()
-                      .fade(duration: 600.ms, delay: 1200.ms),
+                  ).animate().fade(duration: 600.ms, delay: 1200.ms),
                 ],
               ),
             ),

@@ -4,23 +4,11 @@ import 'package:latlong2/latlong.dart';
 //  FONCIRA — Enriched Terrain Model
 // ══════════════════════════════════════════════════════════════
 
-enum DocumentType {
-  titreFoncier,
-  attestation,
-  aucunDocument,
-  enCours,
-}
+enum DocumentType { titreFoncier, attestation, aucunDocument, enCours }
 
-enum TerrainStatus {
-  disponible,
-  enCoursDeVente,
-  reserve,
-}
+enum TerrainStatus { disponible, enCoursDeVente, reserve }
 
-enum SellerType {
-  agence,
-  particulier,
-}
+enum SellerType { agence, particulier }
 
 enum VerificationFoncira {
   nonVerifie,
@@ -181,10 +169,12 @@ class Terrain {
       }
       return '${millions.toStringAsFixed(1)} M FCFA';
     }
-    final formatted = price.toStringAsFixed(0).replaceAllMapped(
-      RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
-      (Match m) => '${m[1]} ',
-    );
+    final formatted = price
+        .toStringAsFixed(0)
+        .replaceAllMapped(
+          RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
+          (Match m) => '${m[1]} ',
+        );
     return '$formatted FCFA';
   }
 
@@ -218,49 +208,154 @@ class Terrain {
   }
 
   factory Terrain.fromJson(Map<String, dynamic> json) {
+    double parseDouble(dynamic value, {double fallback = 0}) {
+      if (value is num) return value.toDouble();
+      if (value == null) return fallback;
+      return double.tryParse(value.toString()) ?? fallback;
+    }
+
+    double? parseNullableDouble(dynamic value) {
+      if (value == null) return null;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString());
+    }
+
+    List<String> parseImageUrls(dynamic value) {
+      if (value is List) {
+        final urls = <String>[];
+        for (final item in value) {
+          if (item is String && item.isNotEmpty) {
+            urls.add(item);
+          } else if (item is Map) {
+            final url =
+                item['url'] ?? item['photo_url'] ?? item['main_photo_url'];
+            if (url is String && url.isNotEmpty) {
+              urls.add(url);
+            }
+          }
+        }
+        return urls;
+      }
+      if (value is Map) {
+        final url =
+            value['url'] ?? value['photo_url'] ?? value['main_photo_url'];
+        if (url is String && url.isNotEmpty) {
+          return [url];
+        }
+      }
+      return [];
+    }
+
+    DateTime parseDateTime(dynamic value) {
+      if (value is String) {
+        final parsed = DateTime.tryParse(value);
+        if (parsed != null) return parsed;
+      }
+      return DateTime.now();
+    }
+
+    DocumentType parseDocumentType(dynamic value) {
+      final raw = value?.toString().toLowerCase() ?? '';
+      switch (raw) {
+        case 'titre_foncier':
+          return DocumentType.titreFoncier;
+        case 'logement':
+        case 'convention':
+        case 'recu_vente':
+          return DocumentType.attestation;
+        case 'aucun_document':
+        case 'ne_sais_pas':
+          return DocumentType.aucunDocument;
+        default:
+          return DocumentType.aucunDocument;
+      }
+    }
+
+    TerrainStatus parseTerrainStatus(dynamic value) {
+      final raw = value?.toString().toLowerCase() ?? '';
+      switch (raw) {
+        case 'disponible':
+          return TerrainStatus.disponible;
+        case 'en_cours_vente':
+          return TerrainStatus.enCoursDeVente;
+        case 'reserve':
+        case 'verifie':
+        case 'suspendu':
+        case 'archivee':
+          return TerrainStatus.reserve;
+        default:
+          return TerrainStatus.disponible;
+      }
+    }
+
+    SellerType parseSellerType(dynamic value) {
+      final raw = value?.toString().toLowerCase() ?? '';
+      switch (raw) {
+        case 'agence':
+        case 'agence_immobiliere':
+          return SellerType.agence;
+        default:
+          return SellerType.particulier;
+      }
+    }
+
+    VerificationFoncira parseVerification(dynamic verificationFonciraRaw) {
+      final raw =
+          verificationFonciraRaw?.toString().toLowerCase() ??
+          json['verification_status']?.toString().toLowerCase() ??
+          '';
+
+      switch (raw) {
+        case 'verification_demandee':
+        case 'verification_requested':
+          return VerificationFoncira.verificationDemandee;
+        case 'en_cours_verification':
+        case 'en_cours_de_verification':
+          return VerificationFoncira.enCoursDeVerification;
+        case 'verification_base_effectuee':
+          return VerificationFoncira.verifieFaibleRisque;
+        case 'verification_complete':
+          return VerificationFoncira.verifieMoyenRisque;
+        case 'risque_identifie':
+          return VerificationFoncira.verifieRisqueEleve;
+        case 'non_verifie':
+        default:
+          return VerificationFoncira.nonVerifie;
+      }
+    }
+
     return Terrain(
-      id: json['id'],
-      title: json['title'],
-      location: json['location'] ?? '',
+      id: (json['id'] ?? '').toString(),
+      title: (json['title'] ?? '').toString(),
+      location: (json['location'] ?? json['ville'] ?? '').toString(),
       quartier: json['quartier'] ?? '',
       zone: json['zone'] ?? '',
       ville: json['ville'] ?? '',
-      price: (json['price'] as num).toDouble(),
-      surface: (json['surface'] as num).toDouble(),
+      price: parseDouble(json['price'] ?? json['price_fcfa']),
+      surface: parseDouble(json['surface'] ?? json['surface_m2']),
       isConstructible: json['is_constructible'] ?? false,
       vue: json['vue'],
       isViabilise: json['is_viabilise'] ?? false,
       description: json['description'],
-      imageUrls: json['image_urls'] != null
-          ? List<String>.from(json['image_urls'])
-          : [],
-      latitude: json['latitude'] != null
-          ? (json['latitude'] as num).toDouble()
-          : null,
-      longitude: json['longitude'] != null
-          ? (json['longitude'] as num).toDouble()
-          : null,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'])
-          : DateTime.now(),
-      documentType: DocumentType.values.firstWhere(
-        (e) => e.name == json['document_type'],
-        orElse: () => DocumentType.aucunDocument,
+      imageUrls: parseImageUrls(
+        json['image_urls'] ??
+            json['additional_photos'] ??
+            (json['photo_url'] != null ? [json['photo_url']] : null) ??
+            (json['main_photo_url'] != null ? [json['main_photo_url']] : null),
       ),
-      terrainStatus: TerrainStatus.values.firstWhere(
-        (e) => e.name == json['terrain_status'],
-        orElse: () => TerrainStatus.disponible,
-      ),
-      sellerType: SellerType.values.firstWhere(
-        (e) => e.name == json['seller_type'],
-        orElse: () => SellerType.particulier,
+      latitude: parseNullableDouble(json['latitude']),
+      longitude: parseNullableDouble(json['longitude']),
+      createdAt: parseDateTime(json['created_at']),
+      documentType: parseDocumentType(json['document_type']),
+      terrainStatus: parseTerrainStatus(json['terrain_status']),
+      sellerType: parseSellerType(
+        json['seller_type'] ?? json['seller_declared_type'],
       ),
       sellerName: json['seller_name'] ?? 'Inconnu',
       sellerPhone: json['seller_phone'],
       sellerAgencyName: json['seller_agency_name'],
-      verificationFoncira: VerificationFoncira.values.firstWhere(
-        (e) => e.name == json['verification_foncira'],
-        orElse: () => VerificationFoncira.nonVerifie,
+      verificationFoncira: parseVerification(
+        json['verification_foncira'] ?? json['verification_status'],
       ),
     );
   }

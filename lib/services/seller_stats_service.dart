@@ -1,15 +1,23 @@
 import '../services/supabase_service.dart';
 
-// ══════════════════════════════════════════════════════════════
-//  SELLER STATS SERVICE — Dashboard Analytics
-// ══════════════════════════════════════════════════════════════
-
 enum StatsPeriod { days7, days30, days90 }
 
 class SellerStatsService {
   final SupabaseService _supabase = SupabaseService();
 
-  // Get terrain stats for a specific period
+  Future<String?> _resolveCurrentUserProfileId() async {
+    final authUserId = _supabase.currentUserId;
+    if (authUserId == null) return null;
+
+    final profile = await _supabase.client
+        .from('users')
+        .select('id')
+        .or('id.eq.$authUserId,auth_id.eq.$authUserId')
+        .maybeSingle();
+
+    return profile?['id']?.toString();
+  }
+
   Future<Map<String, dynamic>> getTerrainStats(
     String terrainId,
     StatsPeriod period,
@@ -17,29 +25,20 @@ class SellerStatsService {
     try {
       final daysAgo = _getPeriodDays(period);
 
-      // Get terrain with counts
-      final response = await _supabase.client
-          .from('terrains_foncira')
-          .select(
-            'id, titre, views_count, verification_requests_count, direct_contacts_count, photos_urls',
-          )
-          .eq('id', terrainId)
-          .single();
+      final response = await _fetchTerrainById(terrainId);
 
-      final views = (response['views_count'] ?? 0) as int;
-      final verificationRequests =
-          (response['verification_requests_count'] ?? 0) as int;
-      final directContacts = (response['direct_contacts_count'] ?? 0) as int;
+      final views = _toInt(response['times_viewed'] ?? response['views_count']);
+      final verificationRequests = _toInt(
+        response['times_inquired'] ?? response['verification_requests_count'],
+      );
+      final directContacts = 0;
 
-      // Generate contextual message
       final message = _getContextualMessage(views, directContacts);
 
       return {
         'terrain_id': terrainId,
-        'titre': response['titre'] ?? 'Sans titre',
-        'photo_url': (response['photos_urls'] as List?)?.isNotEmpty == true
-            ? (response['photos_urls'] as List)[0]
-            : null,
+        'titre': _terrainTitle(response),
+        'photo_url': _terrainPhoto(response),
         'views': views,
         'verification_requests': verificationRequests,
         'direct_contacts': directContacts,
@@ -52,45 +51,34 @@ class SellerStatsService {
     }
   }
 
-  // Get all terrains stats for seller in a period
   Future<List<Map<String, dynamic>>> getSellerStats(StatsPeriod period) async {
     try {
       if (!_supabase.isAuthenticated) {
         return [];
       }
 
-      final userId = _supabase.currentUserId;
+      final userId = await _resolveCurrentUserProfileId();
       if (userId == null) {
         return [];
       }
 
-      final terrains = await _supabase.client
-          .from('terrains_foncira')
-          .select(
-            'id, titre, views_count, verification_requests_count, direct_contacts_count, photos_urls',
-          )
-          .eq('owner_user_id', userId)
-          .eq('is_archived', false)
-          .order('updated_at', ascending: false);
-
+      final terrains = await _fetchSellerTerrains(userId);
       final statsList = <Map<String, dynamic>>[];
 
       for (final terrain in terrains) {
-        final views = (terrain['views_count'] ?? 0) as int;
-        final verificationRequests =
-            (terrain['verification_requests_count'] ?? 0) as int;
-        final directContacts = (terrain['direct_contacts_count'] ?? 0) as int;
+        final views = _toInt(terrain['times_viewed'] ?? terrain['views_count']);
+        final inquiries = _toInt(
+          terrain['times_inquired'] ?? terrain['verification_requests_count'],
+        );
 
         statsList.add({
           'terrain_id': terrain['id'],
-          'titre': terrain['titre'] ?? 'Sans titre',
-          'photo_url': (terrain['photos_urls'] as List?)?.isNotEmpty == true
-              ? (terrain['photos_urls'] as List)[0]
-              : null,
+          'titre': _terrainTitle(terrain),
+          'photo_url': _terrainPhoto(terrain),
           'views': views,
-          'verification_requests': verificationRequests,
-          'direct_contacts': directContacts,
-          'contextual_message': _getContextualMessage(views, directContacts),
+          'verification_requests': inquiries,
+          'direct_contacts': 0,
+          'contextual_message': _getContextualMessage(views, 0),
         });
       }
 
@@ -99,6 +87,52 @@ class SellerStatsService {
       print('Error getting seller stats: $e');
       return [];
     }
+  }
+
+  Future<Map<String, dynamic>> _fetchTerrainById(String terrainId) async {
+    final response = await _supabase.client
+        .from('terrains_foncira')
+        .select(
+          'id, title, times_viewed, times_inquired, additional_photos, main_photo_url, seller_id, deleted_at',
+        )
+        .eq('id', terrainId)
+        .single();
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchSellerTerrains(String userId) async {
+    final response = await _supabase.client
+        .from('terrains_foncira')
+        .select(
+          'id, title, times_viewed, times_inquired, additional_photos, main_photo_url, seller_id, deleted_at',
+        )
+        .eq('seller_id', userId)
+        .isFilter('deleted_at', null)
+        .order('updated_at', ascending: false);
+    return (response as List)
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
+  String _terrainTitle(Map<String, dynamic> terrain) {
+    return (terrain['title'] ?? terrain['titre'] ?? 'Sans titre').toString();
+  }
+
+  String? _terrainPhoto(Map<String, dynamic> terrain) {
+    final additionalPhotos = terrain['additional_photos'];
+    if (additionalPhotos is List && additionalPhotos.isNotEmpty) {
+      final first = additionalPhotos.first;
+      if (first is String && first.isNotEmpty) return first;
+      if (first is Map && first['url'] != null) {
+        return first['url'].toString();
+      }
+    }
+
+    final mainPhoto = terrain['main_photo_url'];
+    if (mainPhoto is String && mainPhoto.isNotEmpty) {
+      return mainPhoto;
+    }
+    return null;
   }
 
   int _getPeriodDays(StatsPeriod period) {
@@ -121,14 +155,17 @@ class SellerStatsService {
     return '';
   }
 
-  // Generate view chart data (simple list for native widget)
   List<int> generateViewsChartData(int totalViews, int daysInPeriod) {
-    // Simple distribution: spread views across days
     final dailyAvg = (totalViews / daysInPeriod).ceil();
     return List.generate(daysInPeriod, (i) {
-      // Add some variance
       final variance = (i % 3) * 2;
       return (dailyAvg + variance).clamp(0, totalViews).toInt();
     });
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '0') ?? 0;
   }
 }

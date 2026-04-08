@@ -1,82 +1,525 @@
-import '../services/supabase_service.dart';
+// ══════════════════════════════════════════════════════════════
+//  FONCIRA — Terrain Seller Service
+// ══════════════════════════════════════════════════════════════
+// Service for sellers to submit, manage, and publish terrains
 
-// ══════════════════════════════════════════════════════════════
-//  FONCIRA — Terrain Seller Service (Mon Inventaire)
-// ══════════════════════════════════════════════════════════════
+import 'package:foncira/services/supabase_service.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io';
 
 class TerrainSellerService {
-  final SupabaseService _supabase = SupabaseService();
+  static final TerrainSellerService _instance =
+      TerrainSellerService._internal();
+  final supabase = SupabaseService().client;
 
-  // Load seller's terrains from Supabase
-  Future<List<Map<String, dynamic>>> getSellerTerrains() async {
+  factory TerrainSellerService() {
+    return _instance;
+  }
+
+  TerrainSellerService._internal();
+
+  Future<String> _resolveCurrentUserId() async {
+    final authUserId = supabase.auth.currentUser?.id;
+    if (authUserId == null) throw Exception('User not authenticated');
+
     try {
-      if (!_supabase.isAuthenticated) {
-        return [];
+      final profile = await supabase
+          .from('users')
+          .select('id')
+          .or('id.eq.$authUserId,auth_id.eq.$authUserId')
+          .maybeSingle();
+
+      final resolved = profile?['id']?.toString();
+      if (resolved != null && resolved.isNotEmpty) return resolved;
+    } catch (_) {
+      // Fallback to auth uid when profile lookup is not available yet.
+    }
+
+    return authUserId;
+  }
+
+  Future<List<String>> _resolveCurrentUserCandidateIds() async {
+    final authUserId = supabase.auth.currentUser?.id;
+    if (authUserId == null) throw Exception('User not authenticated');
+
+    final ids = <String>{authUserId};
+    try {
+      ids.add(await _resolveCurrentUserId());
+    } catch (_) {
+      // Keep auth uid fallback only.
+    }
+
+    return ids.toList();
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Create Terrain (Draft)
+  // ══════════════════════════════════════════════════════════════
+  Future<Map<String, dynamic>?> createTerrain({
+    required String title,
+    required int priceFcfa,
+    required double priceUsd,
+    required double areaSqm,
+    required String city,
+    required String documentType, // 'titre', 'cession', 'permission'
+    String? description,
+    String? sellerNotes,
+    File? imageFile,
+  }) async {
+    try {
+      final userId = await _resolveCurrentUserId();
+
+      // 1. Upload image if provided
+      String? imageUrl;
+      if (imageFile != null) {
+        imageUrl = await _uploadImage(imageFile, userId);
       }
 
-      final userId = _supabase.currentUserId;
-      if (userId == null) {
-        return [];
-      }
+      // 2. Create terrain record
+      final response = await supabase.from('terrains_foncira').insert({
+        'title': title,
+        'price_fcfa': priceFcfa,
+        'price_usd': priceUsd,
+        'area_sqm': areaSqm,
+        'city': city,
+        'document_type': documentType,
+        'description': description,
+        'seller_notes': sellerNotes,
+        'featured_image': imageUrl,
+        'status': 'draft', // Default status
+        'seller_id': userId,
+        'verification_status': 'non_verifie',
+      }).select();
 
-      final response = await _supabase.client
-          .from('terrains_foncira')
-          .select()
-          .eq('owner_user_id', userId)
-          .order('created_at', ascending: false);
-
-      return List<Map<String, dynamic>>.from(response);
+      return response.isNotEmpty ? response[0] as Map<String, dynamic> : null;
     } catch (e) {
-      print('Error loading seller terrains: $e');
-      return [];
+      rethrow;
     }
   }
 
-  // Get seller metrics
-  Future<Map<String, int>> getSellerMetrics() async {
+  // ══════════════════════════════════════════════════════════════
+  // Update Terrain (Sellers can only update drafts)
+  // ══════════════════════════════════════════════════════════════
+  Future<Map<String, dynamic>?> updateTerrain({
+    required String terrainId,
+    String? title,
+    int? priceFcfa,
+    double? priceUsd,
+    double? areaSqm,
+    String? city,
+    String? documentType,
+    String? description,
+    String? sellerNotes,
+    File? imageFile,
+  }) async {
     try {
-      if (!_supabase.isAuthenticated) {
-        return {
-          'views_week': 0,
-          'verification_requests': 0,
-          'direct_contacts': 0,
-        };
+      final userId = await _resolveCurrentUserId();
+
+      // 1. Verify ownership
+      final terrain = await supabase
+          .from('terrains_foncira')
+          .select('seller_id, status')
+          .eq('id', terrainId)
+          .single();
+
+      if (terrain['seller_id'] != userId) {
+        throw Exception('Vous ne pouvez modifier que vos propres terrains');
       }
 
-      final userId = _supabase.currentUserId;
-      if (userId == null) {
-        return {
-          'views_week': 0,
-          'verification_requests': 0,
-          'direct_contacts': 0,
-        };
+      // 2. Upload new image if provided
+      String? imageUrl;
+      if (imageFile != null) {
+        imageUrl = await _uploadImage(imageFile, userId);
       }
 
-      // Get terrains
-      final terrains = await _supabase.client
+      // 3. Build update data
+      final updateData = <String, dynamic>{};
+      if (title != null) updateData['title'] = title;
+      if (priceFcfa != null) updateData['price_fcfa'] = priceFcfa;
+      if (priceUsd != null) updateData['price_usd'] = priceUsd;
+      if (areaSqm != null) updateData['area_sqm'] = areaSqm;
+      if (city != null) updateData['city'] = city;
+      if (documentType != null) updateData['document_type'] = documentType;
+      if (description != null) updateData['description'] = description;
+      if (sellerNotes != null) updateData['seller_notes'] = sellerNotes;
+      if (imageUrl != null) updateData['featured_image'] = imageUrl;
+
+      final response = await supabase
+          .from('terrains_foncira')
+          .update(updateData)
+          .eq('id', terrainId)
+          .select();
+
+      return response.isNotEmpty ? response[0] as Map<String, dynamic> : null;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Publish Terrain (Change status from draft to publie)
+  // ══════════════════════════════════════════════════════════════
+  Future<Map<String, dynamic>?> publishTerrain(String terrainId) async {
+    try {
+      final userId = await _resolveCurrentUserId();
+
+      // 1. Verify ownership
+      final terrain = await supabase
+          .from('terrains_foncira')
+          .select('seller_id, status')
+          .eq('id', terrainId)
+          .single();
+
+      if (terrain['seller_id'] != userId) {
+        throw Exception('Vous ne pouvez publier que vos propres terrains');
+      }
+
+      if (terrain['status'] != 'draft') {
+        throw Exception('Seuls les brouillons peuvent être publiés');
+      }
+
+      // 2. Update status
+      final response = await supabase
+          .from('terrains_foncira')
+          .update({
+            'status': 'publie',
+            'published_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', terrainId)
+          .select();
+
+      return response.isNotEmpty ? response[0] as Map<String, dynamic> : null;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Unpublish Terrain (Change status from publie to draft)
+  // ══════════════════════════════════════════════════════════════
+  Future<Map<String, dynamic>?> unpublishTerrain(String terrainId) async {
+    try {
+      final userId = await _resolveCurrentUserId();
+
+      // 1. Verify ownership
+      final terrain = await supabase
+          .from('terrains_foncira')
+          .select('seller_id, status')
+          .eq('id', terrainId)
+          .single();
+
+      if (terrain['seller_id'] != userId) {
+        throw Exception('Vous ne pouvez dépublier que vos propres terrains');
+      }
+
+      // 2. Update status
+      final response = await supabase
+          .from('terrains_foncira')
+          .update({'status': 'draft'})
+          .eq('id', terrainId)
+          .select();
+
+      return response.isNotEmpty ? response[0] as Map<String, dynamic> : null;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Get Seller's Terrains (all statuses for seller's dashboard)
+  // ══════════════════════════════════════════════════════════════
+  Future<List<Map<String, dynamic>>> getSellerTerrains({
+    String?
+    status, // Optional filter: 'draft', 'publie', 'verification_base_effectuee', etc.
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    try {
+      final userIds = await _resolveCurrentUserCandidateIds();
+
+      var query = supabase
+          .from('terrains_foncira')
+          .select('*')
+          .isFilter('deleted_at', null);
+
+      if (userIds.length == 1) {
+        query = query.eq('seller_id', userIds.first);
+      } else {
+        query = query.or(userIds.map((id) => 'seller_id.eq.$id').join(','));
+      }
+
+      if (status != null) {
+        query = query.eq('status', status);
+      }
+
+      final response = await query
+          .order('created_at', ascending: false)
+          .range(offset, offset + limit - 1);
+      return (response as List).cast<Map<String, dynamic>>();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Get Seller's Published Terrains (for marketplace view)
+  // ══════════════════════════════════════════════════════════════
+  Future<List<Map<String, dynamic>>> getSellerPublishedTerrains({
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    try {
+      final userIds = await _resolveCurrentUserCandidateIds();
+
+      var query = supabase
+          .from('terrains_foncira')
+          .select('*')
+          .eq('status', 'publie')
+          .isFilter('deleted_at', null);
+
+      if (userIds.length == 1) {
+        query = query.eq('seller_id', userIds.first);
+      } else {
+        query = query.or(userIds.map((id) => 'seller_id.eq.$id').join(','));
+      }
+
+      final response = await query
+          .order('published_at', ascending: false)
+          .range(offset, offset + limit - 1);
+
+      return (response as List).cast<Map<String, dynamic>>();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Get Single Terrain (verify ownership)
+  // ══════════════════════════════════════════════════════════════
+  Future<Map<String, dynamic>?> getTerrain(String terrainId) async {
+    try {
+      final userId = await _resolveCurrentUserId();
+
+      final response = await supabase
+          .from('terrains_foncira')
+          .select('*')
+          .eq('id', terrainId)
+          .eq('seller_id', userId)
+          .isFilter('deleted_at', null)
+          .single();
+
+      return response as Map<String, dynamic>;
+    } catch (e) {
+      return null; // Terrain not found or not owned by user
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Get Verification Status of Terrain
+  // ══════════════════════════════════════════════════════════════
+  Future<List<Map<String, dynamic>>> getTerrainVerifications(
+    String terrainId,
+  ) async {
+    try {
+      final userId = await _resolveCurrentUserId();
+
+      // Verify ownership
+      final terrain = await supabase
+          .from('terrains_foncira')
+          .select('seller_id')
+          .eq('id', terrainId)
+          .single();
+
+      if (terrain['seller_id'] != userId) {
+        throw Exception('Accès refusé');
+      }
+
+      final response = await supabase
+          .from('verifications')
+          .select('*, agents(name)')
+          .eq('terrain_id', terrainId)
+          .order('submitted_at', ascending: false);
+
+      return (response as List).cast<Map<String, dynamic>>();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Archive Terrain (soft delete)
+  // ══════════════════════════════════════════════════════════════
+  Future<void> archiveTerrain(String terrainId) async {
+    try {
+      final userId = await _resolveCurrentUserId();
+
+      // Verify ownership
+      final terrain = await supabase
+          .from('terrains_foncira')
+          .select('seller_id')
+          .eq('id', terrainId)
+          .single();
+
+      if (terrain['seller_id'] != userId) {
+        throw Exception('Vous ne pouvez archiver que vos propres terrains');
+      }
+
+      await supabase
+          .from('terrains_foncira')
+          .update({'deleted_at': DateTime.now().toIso8601String()})
+          .eq('id', terrainId);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Image Upload Helper
+  // ══════════════════════════════════════════════════════════════
+  Future<String> _uploadImage(File imageFile, String userId) async {
+    try {
+      final fileName = '${userId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final path = 'seller_terrains/$userId/$fileName';
+
+      await supabase.storage
+          .from('terrain_images')
+          .upload(
+            path,
+            imageFile,
+            fileOptions: FileOptions(cacheControl: '3600', upsert: false),
+          );
+
+      final publicUrl = supabase.storage
+          .from('terrain_images')
+          .getPublicUrl(path);
+
+      return publicUrl;
+    } catch (e) {
+      throw Exception('Erreur lors du téléchargement de l\'image: $e');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Pick Image from Gallery
+  // ══════════════════════════════════════════════════════════════
+  Future<File?> pickImageFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (pickedFile != null) {
+        return File(pickedFile.path);
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Erreur lors de la sélection de l\'image: $e');
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Stats for Seller Dashboard
+  // ══════════════════════════════════════════════════════════════
+  Future<Map<String, int>> getSellerStats() async {
+    try {
+      final userIds = await _resolveCurrentUserCandidateIds();
+
+      var draftsQuery = supabase
+          .from('terrains_foncira')
+          .select('id')
+          .eq('status', 'draft')
+          .isFilter('deleted_at', null);
+      if (userIds.length == 1) {
+        draftsQuery = draftsQuery.eq('seller_id', userIds.first);
+      } else {
+        draftsQuery = draftsQuery.or(
+          userIds.map((id) => 'seller_id.eq.$id').join(','),
+        );
+      }
+      final drafts = await draftsQuery;
+
+      var publishedQuery = supabase
+          .from('terrains_foncira')
+          .select('id')
+          .eq('status', 'publie')
+          .isFilter('deleted_at', null);
+      if (userIds.length == 1) {
+        publishedQuery = publishedQuery.eq('seller_id', userIds.first);
+      } else {
+        publishedQuery = publishedQuery.or(
+          userIds.map((id) => 'seller_id.eq.$id').join(','),
+        );
+      }
+      final published = await publishedQuery;
+
+      var underVerificationQuery = supabase
+          .from('terrains_foncira')
+          .select('id')
+          .neq('status', 'draft')
+          .neq('status', 'publie')
+          .isFilter('deleted_at', null);
+      if (userIds.length == 1) {
+        underVerificationQuery = underVerificationQuery.eq(
+          'seller_id',
+          userIds.first,
+        );
+      } else {
+        underVerificationQuery = underVerificationQuery.or(
+          userIds.map((id) => 'seller_id.eq.$id').join(','),
+        );
+      }
+      final underVerification = await underVerificationQuery;
+
+      return {
+        'drafts': (drafts as List).length,
+        'published': (published as List).length,
+        'under_verification': (underVerification as List).length,
+      };
+    } catch (e) {
+      return {'drafts': 0, 'published': 0, 'under_verification': 0};
+    }
+  }
+
+  // Compatibility helpers used by seller dashboard widgets
+  Future<Map<String, dynamic>> getSellerMetrics() async {
+    try {
+      final userIds = await _resolveCurrentUserCandidateIds();
+
+      var query = supabase
           .from('terrains_foncira')
           .select(
-            'id, views_count, verification_requests_count, direct_contacts_count',
+            'id, views_count, views_week, verification_requests_count, direct_contacts_count',
           )
-          .eq('owner_user_id', userId);
+          .isFilter('deleted_at', null);
 
-      int totalViews = 0;
-      int totalRequests = 0;
-      int totalContacts = 0;
+      if (userIds.length == 1) {
+        query = query.eq('seller_id', userIds.first);
+      } else {
+        query = query.or(userIds.map((id) => 'seller_id.eq.$id').join(','));
+      }
 
-      for (final terrain in terrains) {
-        totalViews += (terrain['views_count'] ?? 0) as int;
-        totalRequests += (terrain['verification_requests_count'] ?? 0) as int;
-        totalContacts += (terrain['direct_contacts_count'] ?? 0) as int;
+      final response = await query;
+
+      int viewsWeek = 0;
+      int verificationRequests = 0;
+      int directContacts = 0;
+
+      for (final item in (response as List)) {
+        final terrain = Map<String, dynamic>.from(item as Map);
+        viewsWeek += _toInt(terrain['views_week'] ?? terrain['views_count']);
+        verificationRequests += _toInt(terrain['verification_requests_count']);
+        directContacts += _toInt(terrain['direct_contacts_count']);
       }
 
       return {
-        'views_week': totalViews,
-        'verification_requests': totalRequests,
-        'direct_contacts': totalContacts,
+        'views_week': viewsWeek,
+        'verification_requests': verificationRequests,
+        'direct_contacts': directContacts,
       };
-    } catch (e) {
-      print('Error loading seller metrics: $e');
+    } catch (_) {
       return {
         'views_week': 0,
         'verification_requests': 0,
@@ -85,71 +528,32 @@ class TerrainSellerService {
     }
   }
 
-  // Update terrain status
-  Future<bool> updateTerrainStatus(String terrainId, String status) async {
-    try {
-      await _supabase.client
-          .from('terrains_foncira')
-          .update({
-            'status': status,
-            'updated_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', terrainId);
-      return true;
-    } catch (e) {
-      print('Error updating terrain status: $e');
-      return false;
-    }
+  Future<void> featureTerrain(String terrainId) async {
+    final userId = await _resolveCurrentUserId();
+
+    await supabase
+        .from('terrains_foncira')
+        .update({
+          'is_featured': true,
+          'featured_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', terrainId)
+        .eq('seller_id', userId);
   }
 
-  // Feature/Highlight terrain
-  Future<bool> featureTerrain(String terrainId) async {
-    try {
-      await _supabase.client
-          .from('terrains_foncira')
-          .update({
-            'is_featured': true,
-            'featured_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', terrainId);
-      return true;
-    } catch (e) {
-      print('Error featuring terrain: $e');
-      return false;
-    }
+  Future<void> markAsSold(String terrainId) async {
+    final userId = await _resolveCurrentUserId();
+
+    await supabase
+        .from('terrains_foncira')
+        .update({'status': 'sold', 'sold_at': DateTime.now().toIso8601String()})
+        .eq('id', terrainId)
+        .eq('seller_id', userId);
   }
 
-  // Archive terrain
-  Future<bool> archiveTerrain(String terrainId) async {
-    try {
-      await _supabase.client
-          .from('terrains_foncira')
-          .update({
-            'is_archived': true,
-            'archived_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', terrainId);
-      return true;
-    } catch (e) {
-      print('Error archiving terrain: $e');
-      return false;
-    }
-  }
-
-  // Mark terrain as sold
-  Future<bool> markAsSold(String terrainId) async {
-    try {
-      await _supabase.client
-          .from('terrains_foncira')
-          .update({
-            'status': 'sold',
-            'sold_at': DateTime.now().toIso8601String(),
-          })
-          .eq('id', terrainId);
-      return true;
-    } catch (e) {
-      print('Error marking terrain as sold: $e');
-      return false;
-    }
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '0') ?? 0;
   }
 }

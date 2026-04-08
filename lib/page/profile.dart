@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/colors.dart';
+import '../services/admin_guard.dart';
 import 'marketplace_page.dart';
 import 'verification_tracking_page.dart';
 import 'external_verification_page.dart';
@@ -11,6 +12,7 @@ import 'favoris_foncira.dart';
 import 'settings_page.dart';
 import 'help_support_page.dart';
 import 'about_foncira_page.dart';
+import 'admin/admin_dashboard.dart';
 
 // ══════════════════════════════════════════════════════════════
 //  FONCIRA — Profile Page (redesigned)
@@ -120,6 +122,68 @@ class _ProfilState extends State<Profil> {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // ── Admin Dashboard Button (visible only if user is admin) ──
+              FutureBuilder<bool>(
+                future: AdminGuard().isUserAdmin(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasData && snapshot.data == true) {
+                    return Column(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AdminGuard.protectedRoute(
+                                  adminPage: const AdminDashboard(),
+                                  context: context,
+                                ),
+                              ),
+                            );
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: Colors.red.withOpacity(0.3),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.admin_panel_settings,
+                                  color: Colors.red,
+                                  size: 14,
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'Accéder au dashboard admin →',
+                                  style: GoogleFonts.inter(
+                                    color: Colors.red,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
+
               const SizedBox(height: 32),
 
               // ── Menu items ──

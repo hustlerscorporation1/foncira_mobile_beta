@@ -1,15 +1,14 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../theme/colors.dart';
-import '../providers/terrain_provider.dart';
+
 import '../component/search_filter_bar.dart';
 import '../models/verification_state.dart';
+import '../models/terrain.dart';
+import '../providers/terrain_provider.dart';
+import '../theme/colors.dart';
+import 'terrain_detail_foncira.dart';
 import 'verification_tunnel_page.dart';
-
-// ══════════════════════════════════════════════════════════════
-//  FONCIRA — Marketplace (Supabase-backed)
-// ══════════════════════════════════════════════════════════════
 
 class MarketplacePage extends StatefulWidget {
   const MarketplacePage({super.key});
@@ -21,6 +20,15 @@ class MarketplacePage extends StatefulWidget {
 class _MarketplacePageState extends State<MarketplacePage> {
   final _searchController = TextEditingController();
   bool _isGridView = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<TerrainProvider>().loadTerrains();
+    });
+  }
 
   @override
   void dispose() {
@@ -54,7 +62,6 @@ class _MarketplacePageState extends State<MarketplacePage> {
       ),
       body: Column(
         children: [
-          // ── Search & Filter ──
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
             child: SearchFilterBar(
@@ -64,8 +71,6 @@ class _MarketplacePageState extends State<MarketplacePage> {
               onFilterTap: () => _showFilterSheet(context, provider),
             ),
           ),
-
-          // ── Results count ──
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: Row(
@@ -84,8 +89,6 @@ class _MarketplacePageState extends State<MarketplacePage> {
               ],
             ),
           ),
-
-          // ── Terrain list ──
           Expanded(
             child: provider.isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -97,7 +100,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                         Icon(Icons.terrain, size: 48, color: kTextMuted),
                         const SizedBox(height: 12),
                         Text(
-                          'Aucun terrain trouvé',
+                          'Aucun terrain trouve',
                           style: GoogleFonts.inter(
                             color: kTextMuted,
                             fontSize: 14,
@@ -116,7 +119,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
                       final terrain = provider.terrains[index];
                       return _TerrainCard(
                         terrain: terrain,
-                        onTap: () => _navigateToVerification(context, terrain),
+                        onTap: () => _navigateToTerrainDetail(context, terrain),
                       );
                     },
                   ),
@@ -126,18 +129,38 @@ class _MarketplacePageState extends State<MarketplacePage> {
     );
   }
 
+  void _navigateToTerrainDetail(
+    BuildContext context,
+    Map<String, dynamic> terrainData,
+  ) {
+    try {
+      final terrain = Terrain.fromJson(terrainData);
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => TerrainDetailFoncira(terrain: terrain),
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+    }
+  }
+
+  @Deprecated('Use _navigateToTerrainDetail instead')
   void _navigateToVerification(
     BuildContext context,
     Map<String, dynamic> terrain,
   ) {
-    // Create initial state from marketplace terrain
     final initialState = VerificationState(
       terrainTitre: terrain['title'] ?? '',
-      terrainPhoto: terrain['photo_url'],
-      terrainSurface: (terrain['surface_m2'] ?? '').toString(),
+      terrainPhoto: terrain['photo_url'] ?? terrain['main_photo_url'],
+      terrainSurface: (terrain['surface_m2'] ?? terrain['surface'] ?? '')
+          .toString(),
       prixFCFA: (terrain['price_fcfa'] as num?)?.toInt() ?? 150000,
-      localisation: terrain['location'] ?? '',
-      typeDocument: null,
+      localisation: terrain['location'] ?? terrain['ville'] ?? '',
+      typeDocuments: [],
       niveauRisque: NiveauRisque.faible,
     );
 
@@ -153,7 +176,6 @@ class _MarketplacePageState extends State<MarketplacePage> {
   }
 
   void _showFilterSheet(BuildContext context, TerrainProvider provider) {
-    // TODO: Implement filter sheet
     showModalBottomSheet(
       context: context,
       backgroundColor: kDarkCard,
@@ -173,10 +195,13 @@ class _MarketplacePageState extends State<MarketplacePage> {
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () => provider.clearFilters().then((_) {
-                  Navigator.pop(context);
-                }),
-                child: const Text('Réinitialiser les filtres'),
+                onPressed: () async {
+                  await provider.clearFilters();
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                  }
+                },
+                child: const Text('Reinitialiser les filtres'),
               ),
             ],
           ),
@@ -194,6 +219,9 @@ class _TerrainCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final imageUrl = terrain['photo_url'] ?? terrain['main_photo_url'];
+    final location = terrain['location'] ?? terrain['ville'] ?? '';
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -206,7 +234,6 @@ class _TerrainCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Thumbnail
             Container(
               width: 80,
               height: 80,
@@ -214,12 +241,11 @@ class _TerrainCard extends StatelessWidget {
                 color: kDarkBg,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: terrain['photo_url'] != null
-                  ? Image.network(terrain['photo_url'], fit: BoxFit.cover)
+              child: imageUrl != null
+                  ? Image.network(imageUrl, fit: BoxFit.cover)
                   : Icon(Icons.terrain, color: kTextMuted),
             ),
             const SizedBox(width: 12),
-            // Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -236,7 +262,7 @@ class _TerrainCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    terrain['location'] ?? '',
+                    location,
                     style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,

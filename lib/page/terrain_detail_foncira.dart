@@ -5,9 +5,9 @@ import 'package:flutter_map/flutter_map.dart';
 import '../theme/colors.dart';
 import '../models/terrain.dart';
 import '../providers/terrain_provider.dart';
-import '../providers/verification_provider.dart';
 import '../component/price_display.dart';
 import '../component/social_proof_banner.dart';
+import '../models/verification_state.dart';
 import 'verification_tunnel_page.dart';
 
 const _kOsmUserAgentPackageName = 'com.foncira';
@@ -644,7 +644,10 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: kPrimary,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 15),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 15,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -1207,33 +1210,79 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
   }
 
   void _showContact() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Contact: ${t.sellerPhone ?? "Non disponible"}',
-          style: GoogleFonts.inter(fontSize: 13),
-        ),
+    final phone = t.sellerPhone ?? 'Non disponible';
+    final hasPhone = phone != 'Non disponible';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
         backgroundColor: kDarkCard,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: Text(
+          'Contacter le vendeur',
+          style: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: kTextPrimary,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (hasPhone) ...[
+              Text(
+                'Numéro: $phone',
+                style: GoogleFonts.inter(fontSize: 14, color: kTextSecondary),
+              ),
+              const SizedBox(height: 16),
+            ] else ...[
+              Text(
+                'Aucun numéro de téléphone disponible',
+                style: GoogleFonts.inter(fontSize: 14, color: kTextSecondary),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ],
+        ),
+        actions: [
+          if (hasPhone)
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                'Fermer',
+                style: TextStyle(color: kTextSecondary),
+              ),
+            )
+          else
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK', style: TextStyle(color: kTextSecondary)),
+            ),
+        ],
       ),
     );
   }
 
   void _requestVerification() {
-    // Create verification entry in provider (for tracking)
-    final verifProv = context.read<VerificationProvider>();
-    verifProv.createFromMarketplace(
-      terrainId: t.id,
-      terrainTitle: t.title,
-      terrainLocation: t.fullLocation,
-      terrainPrice: t.price,
+    // Create verification state with marketplace terrain data
+    final initialState = VerificationState(
+      terrainTitre: t.title,
+      terrainPhoto: t.imageUrls.isNotEmpty ? t.imageUrls[0] : null,
+      terrainSurface: t.surface.toString(),
+      prixFCFA: t.price.toInt(),
+      localisation: t.fullLocation,
+      typeDocuments: [],
+      niveauRisque: NiveauRisque.faible,
     );
 
-    // Navigate to verification tunnel
+    // Navigate directly to verification process (not the intermediate page)
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const VerificationTunnelPage()),
+      MaterialPageRoute(
+        builder: (_) => VerificationTunnelPage(
+          isExternalTerrain: false,
+          initialState: initialState,
+        ),
+      ),
     );
   }
 }

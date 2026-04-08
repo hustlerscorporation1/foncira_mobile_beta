@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../theme/colors.dart';
 
 // ══════════════════════════════════════════════════════════════
-//  FONCIRA — Section Garantie Dédiée
+//  FONCIRA — Section Garantie (Redesign Épuré)
 // ══════════════════════════════════════════════════════════════
 
 class GuaranteeSection extends StatelessWidget {
@@ -11,57 +11,73 @@ class GuaranteeSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [kPrimarySurface, kDarkCard],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: kPrimaryLight.withOpacity(0.3), width: 1),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Icon cadenas + titre
-          Row(
+    return Column(
+      children: [
+        // ─── Header ───
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: kGold.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: Icon(Icons.lock_rounded, color: kGold, size: 24),
+              Text(
+                'Notre garantie',
+                style: GoogleFonts.outfit(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: kTextPrimary,
+                  letterSpacing: -0.3,
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(height: 8),
+              Text(
+                '100% protégé, ou remboursé intégralement',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: kTextSecondary,
+                  height: 1.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // ─── Main Guarantee Card ───
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: kGold.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: kGold.withValues(alpha: 0.25),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.verified_rounded, color: kGold, size: 28),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Votre investissement foncier',
-                      style: GoogleFonts.inter(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: kTextSecondary,
-                        letterSpacing: 0.5,
+                      'Garantie complète',
+                      style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: kGold,
+                        letterSpacing: -0.2,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '100% protégé & garanti',
-                      style: GoogleFonts.outfit(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: kTextPrimary,
-                        letterSpacing: -0.5,
+                      'Rapport en 10 jours ou argent remboursé',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: kTextSecondary,
+                        height: 1.5,
                       ),
                     ),
                   ],
@@ -69,82 +85,37 @@ class GuaranteeSection extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          // Callout principal
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.3),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kGold.withOpacity(0.3), width: 1),
-            ),
-            child: Text(
-              'On garantit un rapport complet, honnête et livré en 10 jours. '
-              'Si on ne livre pas, vous êtes remboursé.',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontStyle: FontStyle.italic,
-                color: kTextPrimary,
-                height: 1.6,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          // 3 points concrets
-          Column(
+        ),
+        const SizedBox(height: 20),
+
+        // ─── Three Guarantee Points (Minimal Cards) ───
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Column(
             children: [
               _GuaranteePoint(
-                icon: Icons.verified_user_rounded,
+                icon: Icons.check_circle_outlined,
                 title: 'Rapport complet',
                 description:
-                    'Vérification cadastrale, terrain, documents légaux — analyse exhaustive',
+                    'Cadastre, documents, propriété, litiges — complet',
               ),
               const SizedBox(height: 12),
               _GuaranteePoint(
                 icon: Icons.schedule_rounded,
-                title: 'Livraison en 10 jours',
+                title: '10 jours maximum',
                 description:
-                    'Vous recevez votre rapport dans les 10 jours, garanti',
+                    'Délai garanti. Sinon, remboursement de la vérification',
               ),
               const SizedBox(height: 12),
               _GuaranteePoint(
-                icon: Icons.currency_exchange_rounded,
-                title: 'Remboursement intégral',
-                description:
-                    'Si on ne livre pas à temps, vous êtes remboursés 100%',
+                icon: Icons.shield_outlined,
+                title: 'Remboursement 100%',
+                description: 'Aucune question si nous ne livrons pas à temps',
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          // CTA
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Détails de la garantie')),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: kGold,
-                foregroundColor: kDarkBg,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: Text(
-                'Lire les conditions complètes',
-                style: GoogleFonts.outfit(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -162,44 +133,44 @@ class _GuaranteePoint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: kSuccess.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Center(child: Icon(icon, color: kSuccess, size: 20)),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: GoogleFonts.outfit(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: kTextPrimary,
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: kBorderDark, width: 1),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: kPrimary, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: kTextPrimary,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                description,
-                style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: kTextSecondary,
-                  height: 1.4,
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: GoogleFonts.inter(
+                    fontSize: 12,
+                    color: kTextSecondary,
+                    height: 1.4,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

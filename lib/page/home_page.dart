@@ -3,13 +3,15 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'dart:io';
 import '../theme/colors.dart';
 import '../providers/terrain_provider.dart';
 import '../providers/verification_provider.dart';
 import '../providers/user_mode_provider.dart';
-import '../models/verification_state.dart';
 import '../models/publish_state.dart';
+import '../models/terrain.dart';
+import '../component/terrain_card.dart';
 import '../services/terrain_seller_service.dart';
 import '../services/terrain_publish_service.dart';
 import '../services/seller_stats_service.dart';
@@ -19,6 +21,7 @@ import 'why_foncira_page.dart';
 import 'request_verification_page.dart';
 import 'verification_tunnel_page.dart';
 import 'verification_tracking_page.dart';
+import 'terrain_detail_foncira.dart';
 import 'profile.dart';
 import 'carte.dart';
 import 'chat_support_page.dart';
@@ -171,6 +174,8 @@ class _HomeContentState extends State<_HomeContent> {
     super.initState();
     // Show tooltip after first frame if not seen
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<TerrainProvider>().loadTerrains();
       final modeProvider = context.read<UserModeProvider>();
       if (modeProvider.shouldShowModeTooltip && modeProvider.isBuyerMode) {
         _showModeTooltip();
@@ -180,6 +185,7 @@ class _HomeContentState extends State<_HomeContent> {
   }
 
   void _showModeTooltip() {
+    if (!mounted) return;
     try {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -340,84 +346,24 @@ class _HomeContentState extends State<_HomeContent> {
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 itemCount: terrainProvider.verifiedTerrains.length,
                 itemBuilder: (context, index) {
-                  final terrain = terrainProvider.verifiedTerrains[index];
-                  final title = terrain['title'] ?? 'Terrain';
+                  final terrainData = terrainProvider.verifiedTerrains[index];
+                  final terrain = Terrain.fromJson(terrainData);
 
-                  return GestureDetector(
+                  return TerrainCard(
+                    terrain: terrain,
+                    isFavorite: terrainProvider.isFavorite(terrain.id),
+                    onFavoriteTap: () {
+                      terrainProvider.toggleFavorite(terrain.id);
+                    },
                     onTap: () {
-                      // Navigate to verification or detail
-                      final initialState = VerificationState(
-                        terrainTitre: title,
-                        localisation: terrain['location'] ?? '',
-                        prixFCFA:
-                            (terrain['price_fcfa'] as num?)?.toInt() ?? 150000,
-                      );
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => VerificationTunnelPage(
-                            initialState: initialState,
-                          ),
+                          builder: (_) =>
+                              TerrainDetailFoncira(terrain: terrain),
                         ),
                       );
                     },
-                    child: Container(
-                      width: 200,
-                      margin: const EdgeInsets.only(right: 12),
-                      decoration: BoxDecoration(
-                        color: kDarkCard,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: kBorderDark),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            height: 120,
-                            decoration: BoxDecoration(
-                              color: kDarkCardLight,
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(16),
-                              ),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                Icons.landscape,
-                                color: kPrimaryLight,
-                                size: 48,
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    color: kTextPrimary,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${terrain['price_fcfa'] ?? 0} FCFA',
-                                  style: GoogleFonts.inter(
-                                    color: kPrimaryLight,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
                   );
                 },
               ),
@@ -438,97 +384,25 @@ class _HomeContentState extends State<_HomeContent> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Column(
-                children: terrainProvider.recentTerrains.map((terrain) {
-                  final title = terrain['title'] ?? 'Terrain';
-                  final location = terrain['location'] ?? '';
+                children: terrainProvider.recentTerrains.map((terrainData) {
+                  final terrain = Terrain.fromJson(terrainData);
 
-                  return GestureDetector(
+                  return TerrainCard(
+                    terrain: terrain,
+                    isHorizontal: true,
+                    isFavorite: terrainProvider.isFavorite(terrain.id),
+                    onFavoriteTap: () {
+                      terrainProvider.toggleFavorite(terrain.id);
+                    },
                     onTap: () {
-                      final initialState = VerificationState(
-                        terrainTitre: title,
-                        localisation: location,
-                        prixFCFA:
-                            (terrain['price_fcfa'] as num?)?.toInt() ?? 150000,
-                      );
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => VerificationTunnelPage(
-                            initialState: initialState,
-                          ),
+                          builder: (_) =>
+                              TerrainDetailFoncira(terrain: terrain),
                         ),
                       );
                     },
-                    child: Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: kDarkCard,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: kBorderDark),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 60,
-                            height: 60,
-                            decoration: BoxDecoration(
-                              color: kDarkCardLight,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Center(
-                              child: Icon(
-                                Icons.landscape,
-                                color: kPrimaryLight,
-                                size: 28,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    color: kTextPrimary,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  location,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.inter(
-                                    color: kTextMuted,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '${terrain['price_fcfa'] ?? 0} FCFA',
-                                  style: GoogleFonts.inter(
-                                    color: kPrimaryLight,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          Icon(
-                            Icons.arrow_forward_ios,
-                            color: kTextMuted,
-                            size: 14,
-                          ),
-                        ],
-                      ),
-                    ),
                   );
                 }).toList(),
               ),
@@ -1536,19 +1410,45 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
 
   Widget _buildTerrainCard(BuildContext context, Map<String, dynamic> terrain) {
     final isFeatured = terrain['is_featured'] ?? false;
-    final status = terrain['status'] ?? 'available';
-    final verificationStatus = terrain['verification_status'] ?? 'non_verifie';
+    final status = (terrain['status'] ?? 'draft').toString();
+    final verificationStatus = (terrain['verification_status'] ?? 'non_verifie')
+        .toString();
     final viewsThisWeek = terrain['views_count'] ?? 0;
+    final title = (terrain['title'] ?? terrain['titre'] ?? 'Sans titre')
+        .toString();
+    final location =
+        (terrain['location'] ??
+                terrain['localisation'] ??
+                terrain['ville'] ??
+                'Localisation inconnue')
+            .toString();
+    final priceUsdRaw = terrain['price_usd'] ?? terrain['prix_usd'] ?? 0;
+    final priceFcfaRaw = terrain['price_fcfa'] ?? terrain['prix_fcfa'] ?? 0;
+    final priceUsd = priceUsdRaw is num
+        ? priceUsdRaw.toDouble()
+        : double.tryParse(priceUsdRaw.toString()) ?? 0;
+    final priceFcfa = priceFcfaRaw is num
+        ? priceFcfaRaw.toDouble()
+        : double.tryParse(priceFcfaRaw.toString()) ?? 0;
 
     // Determine status badge color and text
-    Color statusColor = kSuccess;
-    String statusText = 'Disponible';
-    if (status == 'reserved') {
+    Color statusColor = kTextMuted;
+    String statusText = 'Brouillon';
+    if (status == 'publie') {
+      statusColor = kSuccess;
+      statusText = 'Publie';
+    } else if (status == 'suspendu') {
       statusColor = Colors.orange;
-      statusText = 'Réservé';
-    } else if (status == 'sold') {
+      statusText = 'Suspendu';
+    } else if (status == 'vendu') {
       statusColor = Colors.red;
       statusText = 'Vendu';
+    } else if (status == 'archive') {
+      statusColor = Colors.blueGrey;
+      statusText = 'Archive';
+    } else if (status == 'reserve') {
+      statusColor = Colors.orange;
+      statusText = 'Reserve';
     }
 
     return Container(
@@ -1571,7 +1471,7 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        terrain['titre'] ?? 'Sans titre',
+                        title,
                         style: GoogleFonts.outfit(
                           color: kTextPrimary,
                           fontSize: 16,
@@ -1582,7 +1482,7 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        terrain['localisation'] ?? 'Localisation inconnue',
+                        location,
                         style: GoogleFonts.inter(
                           color: kTextMuted,
                           fontSize: 12,
@@ -1616,7 +1516,7 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '\$${terrain['prix_usd']?.toString() ?? '0'}',
+                      '\$${priceUsd.toStringAsFixed(0)}',
                       style: GoogleFonts.outfit(
                         color: kPrimaryLight,
                         fontSize: 18,
@@ -1624,7 +1524,7 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
                       ),
                     ),
                     Text(
-                      '${terrain['prix_fcfa']?.toString() ?? '0'} FCFA',
+                      '${priceFcfa.toStringAsFixed(0)} FCFA',
                       style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
                     ),
                   ],
@@ -1666,7 +1566,7 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          'Vérifié',
+                          'Verifie',
                           style: GoogleFonts.inter(
                             color: Colors.green,
                             fontSize: 10,
@@ -1708,7 +1608,7 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
               ),
               child: Center(
                 child: Text(
-                  '⭐ En avant',
+                  'En avant',
                   style: GoogleFonts.inter(
                     color: Colors.amber,
                     fontSize: 11,
@@ -1722,9 +1622,6 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
     );
   }
 
-  // ──────────────────────────────────────────────────────────────
-  //  MODE SELECTION BOTTOM SHEET
-  // ──────────────────────────────────────────────────────────────
   void _showModeSelectionSheet(UserModeProvider modeProvider) {
     showModalBottomSheet(
       context: context,
@@ -1947,8 +1844,23 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
   Future<void> _pickPhotos() async {
     final picker = ImagePicker();
     try {
+      // Request permission to access photos
+      final status = await Permission.photos.request();
+      if (!status.isGranted) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Permission d\'accès aux photos refusée'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
       final pickedFiles = await picker.pickMultiImage();
       if (pickedFiles.isEmpty) return;
+
+      print('📸 Photos sélectionnées: ${pickedFiles.length}');
 
       // Max 8 photos combined
       final maxToAdd = 8 - publishState.photoUrls.length;
@@ -1962,22 +1874,63 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
       final filesToUpload = pickedFiles.take(maxToAdd);
 
       // Show loading indicator
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Upload en cours...')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            '📤 Upload en cours... Cela peut prendre quelques secondes',
+          ),
+          duration: Duration(seconds: 30),
+        ),
+      );
 
       final newUrls = <String>[];
+      final failedPhotos = <String>[];
+      String? firstUploadError;
+
       for (final file in filesToUpload) {
         try {
+          print('⏳ Upload photo: ${file.name}');
           // Import dart:io for File
           final uploadedUrl = await _publishService.uploadPhoto(
             File(file.path),
             file.name,
           );
+          print('✅ Photo uploadée: ${file.name}');
           newUrls.add(uploadedUrl);
         } catch (e) {
-          print('Erreur upload photo: $e');
+          print('❌ Erreur upload photo ${file.name}: $e');
+          failedPhotos.add(file.name);
+          firstUploadError ??= e.toString().replaceFirst('Exception: ', '');
         }
+      }
+
+      if (!mounted) return;
+
+      if (newUrls.isEmpty) {
+        // Toutes les uploads ont échoué
+        print('🚨 Aucune photo n\'a pu être uploadée');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('❌ Erreur : Impossible d\'uploader les photos'),
+                const SizedBox(height: 8),
+                Text(
+                  failedPhotos.isNotEmpty
+                      ? 'Fichiers echoues: ${failedPhotos.join(', ')}\n${firstUploadError != null ? 'Raison: $firstUploadError' : ''}'
+                      : 'Verifiez que:\n- Les buckets "terrain_images" et "documents" existent\n- Les policies RLS Storage sont configurees\n- Vous etes bien connecte',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red[700],
+            duration: const Duration(seconds: 5),
+          ),
+        );
+        return;
       }
 
       if (newUrls.isNotEmpty) {
@@ -1989,14 +1942,31 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
           );
         });
 
+        // Show success message
+        if (!mounted) return;
+        String successMsg = '✅ ${newUrls.length} photo(s) ajoutée(s)';
+        if (failedPhotos.isNotEmpty) {
+          successMsg += ' (${failedPhotos.length} échouée(s))';
+        }
+
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${newUrls.length} photo(s) ajoutée(s)')),
+          SnackBar(
+            content: Text(successMsg),
+            backgroundColor: Colors.green[700],
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        print(
+          '✅ Total: ${newUrls.length} photos ajoutées, ${failedPhotos.length} échouées',
         );
       }
     } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+      print('🚨 Erreur globale _pickPhotos: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red[700]),
+      );
     }
   }
 

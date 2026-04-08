@@ -27,6 +27,7 @@ class _RegistrationState extends State<Registration> {
   final fullNameController = TextEditingController();
   final phoneController = TextEditingController();
   final countryController = TextEditingController();
+  String _selectedCountryCode = 'TG';
 
   final _formKeyStep1 = GlobalKey<FormState>();
   final _formKeyStep2 = GlobalKey<FormState>();
@@ -74,24 +75,28 @@ class _RegistrationState extends State<Registration> {
     setState(() => _isLoading = true);
 
     try {
+      final fullName = fullNameController.text.trim();
+      final firstName = fullName.isEmpty ? null : fullName.split(' ').first;
+      final lastName = fullName.contains(' ')
+          ? fullName.split(' ').skip(1).join(' ')
+          : null;
+
       final AuthResponse res = await Supabase.instance.client.auth.signUp(
         email: emailController.text.trim(),
         password: passwordController.text.trim(),
+        data: {
+          'first_name': firstName,
+          'last_name': lastName,
+          'full_name': fullName,
+          'phone_number': phoneController.text.trim(),
+          'country_code': _selectedCountryCode,
+        },
       );
 
       if (!mounted) return;
 
       final newUser = res.user;
       if (newUser != null) {
-        await Supabase.instance.client
-            .from('profiles')
-            .update({
-              'first_name': fullNameController.text.trim(),
-              'phone_number': phoneController.text.trim(),
-              'country': countryController.text.trim(),
-            })
-            .eq('id', newUser.id);
-
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString("name", fullNameController.text.trim());
 
@@ -270,6 +275,7 @@ class _RegistrationState extends State<Registration> {
                   onSelect: (Country country) {
                     setState(() {
                       countryController.text = country.name;
+                      _selectedCountryCode = country.countryCode;
                     });
                   },
                 );
@@ -571,10 +577,9 @@ class RegistrationSuccessPage extends StatelessWidget {
                     final user = Supabase.instance.client.auth.currentUser;
 
                     if (user != null && user.emailConfirmedAt != null) {
-                      Navigator.of(context).pushNamedAndRemoveUntil(
-                        '/home',
-                        (route) => false,
-                      );
+                      Navigator.of(
+                        context,
+                      ).pushNamedAndRemoveUntil('/home', (route) => false);
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
