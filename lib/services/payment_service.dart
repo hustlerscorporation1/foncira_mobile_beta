@@ -7,7 +7,7 @@ import 'supabase_service.dart';
 class PaymentService {
   final SupabaseService _supabase = SupabaseService();
 
-  static const double defaultVerificationPriceFCFA = 150000.0;
+  static const double defaultVerificationPriceFCFA = 250000.0;
 
   // ── Initiate payment ───────────────────────────────────────
   Future<String?> initiatePayment({

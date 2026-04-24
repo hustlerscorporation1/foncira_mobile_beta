@@ -389,7 +389,92 @@ class _CartePageState extends State<CartePage> {
   String? selectedCommune;
   String? selectedCanton;
 
-  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _searchLocationController =
+      TextEditingController();
+  List<Terre> _filteredSearchResults = [];
+  bool _showSearchResults = false;
+
+  void _searchLocationInRealTime(String query) {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) {
+      setState(() {
+        _filteredSearchResults = [];
+        _showSearchResults = false;
+      });
+      return;
+    }
+
+    // Filter terrains by location (ville, quartier, location)
+    final results = terrains.where((t) {
+      final commune = t.commune.toLowerCase();
+      final canton = t.canton.toLowerCase();
+      final region = t.region.toLowerCase();
+      return commune.contains(q) || canton.contains(q) || region.contains(q);
+    }).toList();
+
+    setState(() {
+      _filteredSearchResults = results;
+      _showSearchResults = true;
+    });
+  }
+
+  void _zoomToLocation(List<Terre> locationTerrains) {
+    if (locationTerrains.isEmpty) return;
+
+    // Calculate bounds from terrain coordinates
+    double minLat = locationTerrains.first.coord.latitude;
+    double maxLat = locationTerrains.first.coord.latitude;
+    double minLng = locationTerrains.first.coord.longitude;
+    double maxLng = locationTerrains.first.coord.longitude;
+
+    for (final terrain in locationTerrains) {
+      minLat = minLat > terrain.coord.latitude
+          ? terrain.coord.latitude
+          : minLat;
+      maxLat = maxLat < terrain.coord.latitude
+          ? terrain.coord.latitude
+          : maxLat;
+      minLng = minLng > terrain.coord.longitude
+          ? terrain.coord.longitude
+          : minLng;
+      maxLng = maxLng < terrain.coord.longitude
+          ? terrain.coord.longitude
+          : maxLng;
+    }
+
+    // Calculate center and zoom level
+    final centerLat = (minLat + maxLat) / 2;
+    final centerLng = (minLng + maxLng) / 2;
+    final center = LatLng(centerLat, centerLng);
+
+    // Calculate zoom level based on bounds precision
+    // More precise = tighter zoom
+    final latDiff = (maxLat - minLat).abs();
+    final lngDiff = (maxLng - minLng).abs();
+    final maxDiff = latDiff > lngDiff ? latDiff : lngDiff;
+
+    double zoom = 7; // default
+    if (maxDiff < 0.05)
+      zoom = 15; // quartier precision
+    else if (maxDiff < 0.2)
+      zoom = 13; // commune precision
+    else if (maxDiff < 0.5)
+      zoom = 11; // prefecture precision
+    else
+      zoom = 9; // region precision
+
+    // Animate to location
+    _mapController.move(center, zoom);
+
+    // Close search overlay
+    setState(() => _showSearchResults = false);
+  }
+
+  @override
+  void dispose() {
+    _searchLocationController.dispose();
+    super.dispose();
+  }
 
   void _showTerrainDetails(Terre terrain) {
     try {
@@ -500,23 +585,6 @@ class _CartePageState extends State<CartePage> {
     );
   }
 
-  void _handleSearch() {
-    final q = _searchController.text.trim().toLowerCase();
-    if (q.isEmpty) return;
-    try {
-      final t = terrains.firstWhere((e) => e.id.toLowerCase() == q);
-      _mapController.move(t.coord, 15.0);
-      _showTerrainDetails(t);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Terrain introuvable"),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final List<String> regions = togoData.map<String>((r) => r.nom).toList();
@@ -612,124 +680,110 @@ class _CartePageState extends State<CartePage> {
               ],
             ),
 
-            // --- UI (recherche + filtres) ---
+            // --- Location Search Bar (Top Overlay) ---
             SafeArea(
-              child: Align(
-                alignment: Alignment.topRight,
-                child: Container(
-                  margin: const EdgeInsets.all(12),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.45),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white12),
-                  ),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 250),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // --- Barre de recherche + bouton dans 250px ---
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextField(
-                                controller: _searchController,
-                                onSubmitted: (_) => _handleSearch(),
-                                style: const TextStyle(color: Colors.white),
-                                decoration: InputDecoration(
-                                  hintText: "🔍 ID (ex: T001)",
-                                  hintStyle: TextStyle(color: Colors.white70),
-                                  filled: true,
-                                  fillColor: Colors.black.withOpacity(0.25),
-                                  contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 8,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                    borderSide: BorderSide.none,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            SizedBox(
-                              height: 40,
-                              width: 40,
-                              child: ElevatedButton(
-                                onPressed: _handleSearch,
-                                style: ElevatedButton.styleFrom(
-                                  padding: EdgeInsets.zero,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                ),
-                                child: const Icon(Icons.search, size: 20),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 12),
-
-                        // --- Dropdown Région (toujours visible) ---
-                        _buildDropdown("Région", selectedRegion, regions, (
-                          val,
-                        ) {
-                          setState(() {
-                            selectedRegion = val;
-                            selectedPrefecture = null;
-                            selectedCommune = null;
-                            selectedCanton = null;
-                          });
-                        }),
-
-                        // --- Dropdown Préfecture ---
-                        if (selectedRegion != null) ...[
-                          const SizedBox(height: 8),
-                          _buildDropdown(
-                            "Préfecture",
-                            selectedPrefecture,
-                            prefectures,
-                            (val) {
-                              setState(() {
-                                selectedPrefecture = val;
-                                selectedCommune = null;
-                                selectedCanton = null;
-                              });
-                            },
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.95),
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
                           ),
                         ],
-
-                        // --- Dropdown Commune ---
-                        if (selectedPrefecture != null) ...[
-                          const SizedBox(height: 8),
-                          _buildDropdown("Commune", selectedCommune, communes, (
-                            val,
-                          ) {
-                            setState(() {
-                              selectedCommune = val;
-                              selectedCanton = null;
-                            });
-                          }),
-                        ],
-
-                        // --- Dropdown Canton ---
-                        if (selectedCommune != null) ...[
-                          const SizedBox(height: 8),
-                          _buildDropdown("Canton", selectedCanton, cantons, (
-                            val,
-                          ) {
-                            setState(() {
-                              selectedCanton = val;
-                            });
-                          }),
-                        ],
-                      ],
+                      ),
+                      child: TextField(
+                        controller: _searchLocationController,
+                        onChanged: _searchLocationInRealTime,
+                        style: const TextStyle(color: Colors.black),
+                        decoration: InputDecoration(
+                          hintText: "Rechercher un quartier, une ville...",
+                          hintStyle: TextStyle(
+                            color: Colors.black.withOpacity(0.5),
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.location_on_rounded,
+                            color: Colors.black54,
+                          ),
+                          suffixIcon: _searchLocationController.text.isNotEmpty
+                              ? GestureDetector(
+                                  onTap: () {
+                                    _searchLocationController.clear();
+                                    _searchLocationInRealTime('');
+                                  },
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    color: Colors.black.withOpacity(0.5),
+                                  ),
+                                )
+                              : null,
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+
+                    // Search results overlay
+                    if (_showSearchResults && _filteredSearchResults.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Container(
+                          constraints: const BoxConstraints(maxHeight: 200),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: ListView.builder(
+                            shrinkWrap: true,
+                            itemCount: _filteredSearchResults.length,
+                            itemBuilder: (context, index) {
+                              final terrain = _filteredSearchResults[index];
+                              return ListTile(
+                                leading: Icon(
+                                  Icons.place_rounded,
+                                  color: terrain.status.color,
+                                ),
+                                title: Text(
+                                  terrain.canton,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  '${terrain.commune}, ${terrain.region}',
+                                  style: TextStyle(
+                                    color: Colors.black.withOpacity(0.6),
+                                  ),
+                                ),
+                                onTap: () {
+                                  _zoomToLocation([terrain]);
+                                  _searchLocationController.clear();
+                                  _showTerrainDetails(terrain);
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ),

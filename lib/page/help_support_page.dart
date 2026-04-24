@@ -22,7 +22,7 @@ class _HelpSupportPageState extends State<HelpSupportPage> {
     {
       'q': 'Combien coûte une vérification ?',
       'a':
-          'La vérification complète d\'un terrain coûte \$259 (≈150 000 FCFA). Cela inclut : vérification cadastrale, visite terrain, vérification coutumière, et rapport détaillé. Faible risque ou risque élevé : le prix reste le même.',
+          'La vérification complète d\'un terrain coûte \$380 (≈250 000 FCFA). Cela inclut : demande validée, vérification administrative, vérification coutumière, vérification du voisinage & géomètre, et rapport détaillé. Faible risque ou risque élevé : le prix reste le même.',
     },
     {
       'q': 'Comment publier un terrain à vendre ?',

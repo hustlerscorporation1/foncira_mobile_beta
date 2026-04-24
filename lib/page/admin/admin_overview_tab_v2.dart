@@ -1,6 +1,6 @@
-﻿// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  FONCIRA â€” Admin Dashboard Overview Tab (Real-time from Supabase)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════════════════
+//  FONCIRA — Admin Dashboard Overview Tab (Real-time from Supabase)
+// ══════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import 'package:foncira/theme/colors.dart';
@@ -37,17 +37,17 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
           ),
           const SizedBox(height: 24),
 
-          // 4 MÃ©triques KPI en temps rÃ©el
+          // 4 Métriques KPI en temps réel
           _buildMetricsGrid(),
 
           const SizedBox(height: 32),
 
-          // Graphique vÃ©rifications par jour (30 derniers jours)
+          // Graphique vérifications par jour (30 derniers jours)
           _buildVerificationsChart(),
 
           const SizedBox(height: 32),
 
-          // Liste des 5 derniÃ¨res vÃ©rifications
+          // Liste des 5 dernières vérifications
           _buildRecentVerificationsList(),
         ],
       ),
@@ -62,9 +62,9 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
       mainAxisSpacing: 16,
       crossAxisSpacing: 16,
       children: [
-        // VÃ©rifications actives
+        // Vérifications actives
         _buildMetricCard(
-          title: 'VÃ©rifications actives',
+          title: 'Vérifications actives',
           future: _getActiveVerifications(),
           icon: Icons.verified_user,
           color: kPrimary,
@@ -77,7 +77,7 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
           color: kSuccess,
           isCurrency: true,
         ),
-        // VÃ©rifications en retard
+        // Vérifications en retard
         _buildMetricCardWithAlert(
           title: 'En retard',
           future: _getLateVerifications(),
@@ -236,7 +236,7 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'VÃ©rifications par jour (30 derniers jours)',
+          'Vérifications par jour (30 derniers jours)',
           style: GoogleFonts.outfit(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -305,7 +305,10 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
                   final count = (item['count'] as num?)?.toInt() ?? 0;
                   final day = item['day'] as String? ?? '';
                   final barHeight = maxCount > 0
-                      ? ((count / maxCount) * chartHeight).clamp(0.0, chartHeight)
+                      ? ((count / maxCount) * chartHeight).clamp(
+                          0.0,
+                          chartHeight,
+                        )
                       : 0.0;
 
                   return SizedBox(
@@ -357,7 +360,7 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'DerniÃ¨res vÃ©rifications soumises',
+          'Dernières vérifications soumises',
           style: GoogleFonts.outfit(
             fontSize: 16,
             fontWeight: FontWeight.bold,
@@ -385,7 +388,7 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
             if (verifications.isEmpty) {
               return Center(
                 child: Text(
-                  'Aucune vÃ©rification soumise',
+                  'Aucune vérification soumise',
                   style: GoogleFonts.inter(color: Colors.grey[500]),
                 ),
               );
@@ -438,7 +441,7 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
                                 ),
                               ),
                               Text(
-                                '${v['terrain_location'] ?? 'N/A'} â€¢ Agent: ${v['agent_name'] ?? 'N/A'}',
+                                '${v['terrain_location'] ?? 'N/A'} • Agent: ${v['agent_name'] ?? 'N/A'}',
                                 style: GoogleFonts.inter(
                                   fontSize: 11,
                                   color: Colors.grey[500],
@@ -477,9 +480,9 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
     );
   }
 
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ══════════════════════════════════════════════════════════════
   // Supabase Queries
-  // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+  // ══════════════════════════════════════════════════════════════
 
   Future<String> _getActiveVerifications() async {
     try {
@@ -514,7 +517,7 @@ class _AdminOverviewTabState extends State<AdminOverviewTab> {
         (sum, p) => sum + (p['amount_fcfa'] as int? ?? 0),
       );
 
-      // Format avec sÃ©parateurs
+      // Format avec séparateurs
       final formatted = NumberFormat('#,##0', 'fr_FR').format(total);
       return '$formatted F';
     } catch (e) {

@@ -22,32 +22,29 @@ class _ProactiveNotificationsWidgetState
   final List<FonciraNotification> notifications = [
     FonciraNotification(
       id: 'notif_001',
-      agentName: 'Séna Amégavi',
-      agentInitial: 'S',
-      message: 'a consulté le chef du quartier Adidogomé ce matin',
-      result: 'Résultat favorable',
-      timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-      isPositive: true,
+      recipientId: 'user_001',
+      notificationType: 'verification_update',
+      title: 'Vérification mise à jour',
+      message: 'Séna Amégavi a consulté le chef du quartier Adidogomé ce matin',
+      createdAt: DateTime.now().subtract(const Duration(hours: 2)),
       isRead: false,
     ),
     FonciraNotification(
       id: 'notif_002',
-      agentName: 'Kwaku Mensah',
-      agentInitial: 'K',
-      message: 'a complété la vérification cadastrale du terrain',
-      result: 'Titre foncier confirmé',
-      timestamp: DateTime.now().subtract(const Duration(hours: 4)),
-      isPositive: true,
+      recipientId: 'user_001',
+      notificationType: 'verification_created',
+      title: 'Vérification complétée',
+      message: 'Kwaku Mensah a complété la vérification cadastrale du terrain',
+      createdAt: DateTime.now().subtract(const Duration(hours: 4)),
       isRead: false,
     ),
     FonciraNotification(
       id: 'notif_003',
-      agentName: 'Marie Dubois',
-      agentInitial: 'M',
-      message: 'a visité le terrain à Adidogomé',
-      result: 'Borne GPS horodatée',
-      timestamp: DateTime.now().subtract(const Duration(days: 1)),
-      isPositive: true,
+      recipientId: 'user_001',
+      notificationType: 'milestone_completed',
+      title: 'Étape complétée',
+      message: 'Marie Dubois a visité le terrain à Adidogomé',
+      createdAt: DateTime.now().subtract(const Duration(days: 1)),
       isRead: false,
     ),
   ];
@@ -137,7 +134,7 @@ class _ProactiveNotificationsWidgetState
               children: [
                 _NotificationItem(
                   notification: notification,
-                  formattedTime: _formatTime(notification.timestamp),
+                  formattedTime: _formatTime(notification.createdAt),
                 ),
                 if (!isLast)
                   Padding(
@@ -193,14 +190,23 @@ class _NotificationItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resultColor = notification.isPositive ? kSuccess : kWarning;
+    // Extract agent name from title or message
+    final agentName = notification.title.split(' ').first;
+    final agentInitial = agentName.isNotEmpty ? agentName.substring(0, 1) : '?';
+
+    // Color based on type
+    final resultColor = notification.notificationType == 'verification_created'
+        ? kSuccess
+        : notification.notificationType == 'milestone_completed'
+        ? Color(0xFF10B981)
+        : kWarning;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Avatar agent
+          // Avatar
           Container(
             width: 48,
             height: 48,
@@ -215,7 +221,7 @@ class _NotificationItem extends StatelessWidget {
             ),
             child: Center(
               child: Text(
-                notification.agentName.substring(0, 1),
+                agentInitial,
                 style: GoogleFonts.outfit(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -234,7 +240,7 @@ class _NotificationItem extends StatelessWidget {
                   text: TextSpan(
                     children: [
                       TextSpan(
-                        text: notification.agentName,
+                        text: notification.title,
                         style: GoogleFonts.outfit(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -242,10 +248,10 @@ class _NotificationItem extends StatelessWidget {
                         ),
                       ),
                       TextSpan(
-                        text: ' ${notification.message}',
+                        text: ' — ${notification.message}',
                         style: GoogleFonts.inter(
-                          fontSize: 14,
-                          color: kTextPrimary,
+                          fontSize: 12,
+                          color: kTextSecondary,
                         ),
                       ),
                     ],
@@ -261,7 +267,9 @@ class _NotificationItem extends StatelessWidget {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      notification.result,
+                      notification.notificationType == 'verification_created'
+                          ? 'Vérification complétée'
+                          : 'Mise à jour',
                       style: GoogleFonts.inter(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,

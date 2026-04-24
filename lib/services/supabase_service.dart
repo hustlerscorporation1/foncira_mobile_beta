@@ -7,6 +7,7 @@ import 'config.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
+  static SupabaseService get instance => _instance;
 
   factory SupabaseService() {
     return _instance;
@@ -42,10 +43,7 @@ class SupabaseService {
   Future<void> initialize() async {
     if (_serviceInitialized) return;
 
-    await Supabase.initialize(
-      url: supabaseUrl,
-      anonKey: supabaseAnonKey,
-    );
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
     _client = Supabase.instance.client;
     _serviceInitialized = true;
   }

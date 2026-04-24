@@ -6,6 +6,7 @@ import 'package:foncira/services/supabase_service.dart';
 import 'package:foncira/services/admin_guard.dart';
 import 'package:foncira/services/agent_guard.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'page/loginpage_refactored.dart';
 import 'page/registerpage.dart';
@@ -28,6 +29,8 @@ import 'widgets/app_lifecycle_detector.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: '.env');
 
   // Initialize Supabase service
   await SupabaseService().initialize();

@@ -1,6 +1,6 @@
-﻿// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-//  FONCIRA â€” Admin Terrains Tab (Manage & Moderation)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ══════════════════════════════════════════════════════════════
+//  FONCIRA — Admin Terrains Tab (Manage & Moderation)
+// ══════════════════════════════════════════════════════════════
 
 import 'package:flutter/material.dart';
 import 'package:foncira/theme/colors.dart';
@@ -40,7 +40,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // En-tÃªte avec titre et bouton ajouter
+        // En-tête avec titre et bouton ajouter
         Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -105,7 +105,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
                     _buildFilterDropdown(
                       'Ville',
                       _selectedCity,
-                      ['Todos', 'LomÃ©', 'Kara', 'SokodÃ©', 'AtakpamÃ©'],
+                      ['Todos', 'Lomé', 'Kara', 'Sokodé', 'Atakpamé'],
                       (value) => setState(() {
                         _selectedCity = value;
                         _currentPage = 0;
@@ -148,7 +148,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
                     ),
                     const SizedBox(width: 8),
                     _buildFilterDropdown(
-                      'VÃ©rification',
+                      'Vérification',
                       _selectedVerificationStatus,
                       [
                         'Tous',
@@ -190,7 +190,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
               if (terrains.isEmpty) {
                 return Center(
                   child: Text(
-                    'Aucun terrain trouvÃ©',
+                    'Aucun terrain trouvé',
                     style: GoogleFonts.inter(color: Colors.grey[500]),
                   ),
                 );
@@ -215,12 +215,13 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
 
                         return GridView.builder(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossAxisCount,
-                            mainAxisSpacing: 16,
-                            crossAxisSpacing: 16,
-                            childAspectRatio: childAspectRatio,
-                          ),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
+                                crossAxisCount: crossAxisCount,
+                                mainAxisSpacing: 16,
+                                crossAxisSpacing: 16,
+                                childAspectRatio: childAspectRatio,
+                              ),
                           itemCount: terrains.length,
                           itemBuilder: (context, index) {
                             return _buildTerrainCard(terrains[index]);
@@ -516,6 +517,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
 
     return null;
   }
+
   Widget _buildPaginationControls(int totalItems) {
     final totalPages = (totalItems / _itemsPerPage).ceil();
 
@@ -659,7 +661,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
                   setState(() {});
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Statut mis Ã  jour'),
+                      content: Text('Statut mis à jour'),
                       backgroundColor: kSuccess,
                     ),
                   );
@@ -687,7 +689,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A2E),
         title: Text(
-          'Statut de vÃ©rification',
+          'Statut de vérification',
           style: GoogleFonts.outfit(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -747,7 +749,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
                   setState(() {});
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('VÃ©rification mise Ã  jour'),
+                      content: Text('Vérification mise à jour'),
                       backgroundColor: kSuccess,
                     ),
                   );
@@ -776,7 +778,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
           ),
         ),
         content: Text(
-          'Cette action marquera le terrain comme archivÃ© (deleted_at = now). ÃŠtes-vous sÃ»r?',
+          'Cette action marquera le terrain comme archivé (deleted_at = now). Êtes-vous sûr?',
           style: GoogleFonts.inter(color: Colors.grey[300]),
         ),
         actions: [
@@ -796,7 +798,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
                 setState(() {});
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('Terrain archivÃ©'),
+                    content: Text('Terrain archivé'),
                     backgroundColor: Colors.orange,
                   ),
                 );
@@ -816,7 +818,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A1A2E),
         title: Text(
-          'VÃ©rifications liÃ©es',
+          'Vérifications liées',
           style: GoogleFonts.outfit(
             fontSize: 18,
             fontWeight: FontWeight.bold,
@@ -846,7 +848,7 @@ class _AdminTerrainsTabState extends State<AdminTerrainsTab> {
               children: verifications.isEmpty
                   ? [
                       Text(
-                        'Aucune vÃ©rification liÃ©e',
+                        'Aucune vérification liée',
                         style: GoogleFonts.inter(color: Colors.grey[500]),
                       ),
                     ]

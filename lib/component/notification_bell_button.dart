@@ -6,17 +6,60 @@ import '../theme/colors.dart';
 import '../page/notifications_page.dart';
 
 // ══════════════════════════════════════════════════════════════
-//  FONCIRA — Notification Bell Button (AppBar Integration)
+//  FONCIRA — Notification Bell Button (Real-time with Animation)
 // ══════════════════════════════════════════════════════════════
 
-class NotificationBellButton extends StatelessWidget {
+class NotificationBellButton extends StatefulWidget {
   const NotificationBellButton({super.key});
+
+  @override
+  State<NotificationBellButton> createState() => _NotificationBellButtonState();
+}
+
+class _NotificationBellButtonState extends State<NotificationBellButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _animationController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+
+    // Initialize notification stream when button is created
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationProvider>().initializeNotificationStream();
+      _startAnimation();
+    });
+  }
+
+  void _startAnimation() {
+    if (mounted) {
+      _animationController.repeat();
+    }
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<NotificationProvider>(
       builder: (context, notificationProvider, _) {
         final unreadCount = notificationProvider.unreadCount;
+        final hasUnread = unreadCount > 0;
+
+        // Control animation based on unread count
+        if (hasUnread && !_animationController.isAnimating) {
+          _startAnimation();
+        } else if (!hasUnread && _animationController.isAnimating) {
+          _animationController.stop();
+        }
 
         return Padding(
           padding: const EdgeInsets.only(right: 16),
@@ -47,11 +90,53 @@ class NotificationBellButton extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Red dot badge if unread
-                if (unreadCount > 0)
+
+                // Animated green dot if unread
+                if (hasUnread)
                   Positioned(
-                    top: 4,
-                    right: 4,
+                    top: 6,
+                    right: 6,
+                    child: ScaleTransition(
+                      scale: Tween<double>(begin: 0.8, end: 1.1).animate(
+                        CurvedAnimation(
+                          parent: _animationController,
+                          curve: Curves.easeInOut,
+                        ),
+                      ),
+                      child: Container(
+                        width: 16,
+                        height: 16,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: kDarkBg, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withOpacity(0.6),
+                              blurRadius: 8,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 4,
+                            height: 4,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Badge count if needed (optional)
+                if (unreadCount > 0 && unreadCount <= 99)
+                  Positioned(
+                    top: 0,
+                    right: 0,
                     child: Container(
                       width: 20,
                       height: 20,
@@ -71,7 +156,7 @@ class NotificationBellButton extends StatelessWidget {
                         child: Text(
                           unreadCount > 9 ? '9+' : '$unreadCount',
                           style: GoogleFonts.inter(
-                            fontSize: 10,
+                            fontSize: 9,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),

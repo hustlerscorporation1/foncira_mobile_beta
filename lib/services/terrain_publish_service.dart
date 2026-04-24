@@ -126,13 +126,129 @@ class TerrainPublishService {
 
       final terrainId = response[0]['id'] as String;
 
+      // Save required documents to verification_documents table
+      await _saveDocumentsToDatabase(
+        terrainId,
+        publishState.requiredDocuments,
+        publishState.optionalDocuments,
+        currentUserId,
+      );
+
       if (featured) {
         await _createVendorSubscription(terrainId, currentUserId);
       }
 
+      // ── Create admin notification ──
+      await _createAdminNotification(
+        terrainId: terrainId,
+        title: publishState.titre,
+        sellerId: currentUserId,
+      );
+
       return terrainId;
     } catch (e) {
       throw Exception('Erreur publication: $e');
+    }
+  }
+
+  // Save documents to verification_documents table
+  Future<void> _saveDocumentsToDatabase(
+    String terrainId,
+    Map<String, String> requiredDocuments,
+    Map<String, String> optionalDocuments,
+    String userId,
+  ) async {
+    try {
+      final documents = <Map<String, dynamic>>[];
+
+      // Add required documents
+      for (final entry in requiredDocuments.entries) {
+        documents.add({
+          'terrain_id': terrainId,
+          'document_url': entry.value,
+          'document_category': entry.key,
+          'document_type': _mapCategoryToType(entry.key),
+          'uploaded_by': userId,
+          'is_verified': false,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+
+      // Add optional documents
+      for (final entry in optionalDocuments.entries) {
+        documents.add({
+          'terrain_id': terrainId,
+          'document_url': entry.value,
+          'document_category': entry.key,
+          'document_type': _mapCategoryToType(entry.key),
+          'uploaded_by': userId,
+          'is_verified': false,
+          'is_optional': true,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+
+      if (documents.isNotEmpty) {
+        await _supabase.client.from('verification_documents').insert(documents);
+        print('Documents saved successfully');
+      }
+    } catch (e) {
+      print('Error saving documents: $e');
+      // Don't throw - document save error shouldn't block terrain creation
+    }
+  }
+
+  // Map document category to type
+  String _mapCategoryToType(String category) {
+    switch (category) {
+      case 'titre_foncier':
+        return 'titre_de_propriete';
+      case 'plan_terrain':
+        return 'plan_cadastral';
+      case 'autorisation_vente':
+        return 'autorisation';
+      case 'recu_achat':
+        return 'facture';
+      default:
+        return 'autre';
+    }
+  }
+
+  // Create notification for admin to review terrain
+  Future<void> _createAdminNotification({
+    required String terrainId,
+    required String title,
+    required String sellerId,
+  }) async {
+    try {
+      // Get all admin users
+      final adminUsers = await _supabase.client
+          .from('users')
+          .select('id')
+          .eq('role', 'admin');
+
+      if (adminUsers.isEmpty) {
+        print('Warning: No admin users found for notifications');
+        return;
+      }
+
+      // Create notification for each admin
+      for (final admin in adminUsers as List) {
+        final adminId = admin['id'] as String;
+
+        await _supabase.client.from('notifications').insert({
+          'recipient_id': adminId,
+          'notification_type': 'action_required',
+          'title': 'Nouveau terrain à valider',
+          'message': 'Terrain "$title" en attente de validation',
+          'related_verification_id': terrainId,
+          'is_read': false,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e) {
+      print('Error creating admin notification: $e');
+      // Don't throw - notification error shouldn't block terrain creation
     }
   }
 
@@ -158,6 +274,65 @@ class TerrainPublishService {
 
   Future<double> getUploadProgress(int uploadedSize, int totalSize) async {
     return uploadedSize / totalSize;
+  }
+
+  // Upload document to Supabase Storage
+  Future<String> uploadDocument(File file, String fileName) async {
+    try {
+      if (!file.existsSync()) {
+        throw Exception('Fichier non trouve: ${file.path}');
+      }
+
+      final currentUserId = _supabase.client.auth.currentUser?.id;
+      if (currentUserId == null) {
+        throw Exception('Utilisateur non connecte');
+      }
+
+      final safeFileName = fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final path =
+          'seller_terrains/$currentUserId/documents/${DateTime.now().millisecondsSinceEpoch}_$safeFileName';
+
+      print('Uploading document to: $_legacyPhotoBucket/$path');
+      await _supabase.client.storage
+          .from(_legacyPhotoBucket)
+          .upload(path, file);
+
+      final publicUrl = _supabase.client.storage
+          .from(_legacyPhotoBucket)
+          .getPublicUrl(path);
+
+      print('Document uploaded successfully: $publicUrl');
+      return publicUrl;
+    } catch (e) {
+      print('Error uploading document: $e');
+      final errorText = e.toString();
+      final lower = errorText.toLowerCase();
+
+      if (lower.contains('permission') ||
+          lower.contains('unauthorized') ||
+          lower.contains('row-level security') ||
+          lower.contains('rls')) {
+        throw Exception(
+          'Permission refusee. Verifiez les policies du bucket documents.',
+        );
+      }
+      if (lower.contains('404') || lower.contains('not found')) {
+        throw Exception('Bucket documents introuvable.');
+      }
+
+      throw Exception('Erreur upload: $e');
+    }
+  }
+
+  // Delete uploaded document (best effort)
+  Future<void> deleteDocument(String documentPath) async {
+    try {
+      await _supabase.client.storage.from(_legacyPhotoBucket).remove([
+        documentPath,
+      ]);
+    } catch (e) {
+      print('Erreur suppression document: $e');
+    }
   }
 
   // Delete uploaded photos (best effort)

@@ -255,7 +255,13 @@ class _AdminVerificationDetailPageState
           ),
         ),
         const SizedBox(height: 12),
-        ...['J1 Documents', 'J3 Visite', 'J7 Autorités', 'J10 Rapport'].map(
+        ...[
+          'J1 Validée',
+          'J3 Admin',
+          'J5 Coutumière',
+          'J7 Voisinage',
+          'J10 Rapport',
+        ].map(
           (milestone) => Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Container(

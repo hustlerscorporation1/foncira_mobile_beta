@@ -488,11 +488,10 @@ class TerrainSellerService {
     try {
       final userIds = await _resolveCurrentUserCandidateIds();
 
+      // Get terrains for this seller
       var query = supabase
           .from('terrains_foncira')
-          .select(
-            'id, views_count, views_week, verification_requests_count, direct_contacts_count',
-          )
+          .select('id, views_count, verification_requests_count, status')
           .isFilter('deleted_at', null);
 
       if (userIds.length == 1) {
@@ -501,30 +500,56 @@ class TerrainSellerService {
         query = query.or(userIds.map((id) => 'seller_id.eq.$id').join(','));
       }
 
-      final response = await query;
+      final terrains = await query;
+      final terrainIds = (terrains as List)
+          .map((t) => (t as Map)['id'] as String)
+          .toList();
 
-      int viewsWeek = 0;
+      // Sum verification requests and count sold terrains
       int verificationRequests = 0;
-      int directContacts = 0;
-
-      for (final item in (response as List)) {
-        final terrain = Map<String, dynamic>.from(item as Map);
-        viewsWeek += _toInt(terrain['views_week'] ?? terrain['views_count']);
+      int soldCount = 0;
+      for (final terrain in terrains) {
         verificationRequests += _toInt(terrain['verification_requests_count']);
-        directContacts += _toInt(terrain['direct_contacts_count']);
+        if ((terrain['status'] as String?) == 'vendu') {
+          soldCount++;
+        }
+      }
+
+      // Get total views from terrain_analytics
+      int viewsTotal = 0;
+      if (terrainIds.isNotEmpty) {
+        try {
+          final analyticsQuery = supabase
+              .from('terrain_analytics')
+              .select('views_count');
+
+          if (terrainIds.length == 1) {
+            analyticsQuery.eq('terrain_id', terrainIds.first);
+          } else {
+            analyticsQuery.or(
+              terrainIds.map((id) => 'terrain_id.eq.$id').join(','),
+            );
+          }
+
+          final analytics = await analyticsQuery;
+          for (final item in analytics as List) {
+            viewsTotal += _toInt(item['views_count']);
+          }
+        } catch (_) {
+          // Analytics not available, use terrain views_count as fallback
+          for (final terrain in terrains) {
+            viewsTotal += _toInt(terrain['views_count']);
+          }
+        }
       }
 
       return {
-        'views_week': viewsWeek,
+        'views_total': viewsTotal,
         'verification_requests': verificationRequests,
-        'direct_contacts': directContacts,
+        'sold_count': soldCount,
       };
     } catch (_) {
-      return {
-        'views_week': 0,
-        'verification_requests': 0,
-        'direct_contacts': 0,
-      };
+      return {'views_total': 0, 'verification_requests': 0, 'sold_count': 0};
     }
   }
 
@@ -549,6 +574,78 @@ class TerrainSellerService {
         .update({'status': 'sold', 'sold_at': DateTime.now().toIso8601String()})
         .eq('id', terrainId)
         .eq('seller_id', userId);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Suspend Terrain (temporarily disable from marketplace)
+  // ══════════════════════════════════════════════════════════════
+  Future<void> suspendTerrain(String terrainId) async {
+    try {
+      final userId = await _resolveCurrentUserId();
+
+      // Verify ownership
+      final terrain = await supabase
+          .from('terrains_foncira')
+          .select('seller_id, status')
+          .eq('id', terrainId)
+          .single();
+
+      if (terrain['seller_id'] != userId) {
+        throw Exception('Vous ne pouvez suspendre que vos propres terrains');
+      }
+
+      await supabase
+          .from('terrains_foncira')
+          .update({
+            'status': 'suspendu',
+            'suspended_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', terrainId);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // Delete Terrain (hard delete - permanent removal)
+  // ══════════════════════════════════════════════════════════════
+  Future<void> deleteTerrain(String terrainId) async {
+    try {
+      final userId = await _resolveCurrentUserId();
+
+      // Verify ownership
+      final terrain = await supabase
+          .from('terrains_foncira')
+          .select('seller_id')
+          .eq('id', terrainId)
+          .single();
+
+      if (terrain['seller_id'] != userId) {
+        throw Exception('Vous ne pouvez supprimer que vos propres terrains');
+      }
+
+      // First check if sold - only allow deletion of unsold terrains
+      final terrainData = await supabase
+          .from('terrains_foncira')
+          .select('status')
+          .eq('id', terrainId)
+          .single();
+
+      if (terrainData['status'] == 'sold') {
+        throw Exception('Impossible de supprimer un terrain vendu');
+      }
+
+      // Soft delete by setting deleted_at timestamp
+      await supabase
+          .from('terrains_foncira')
+          .update({
+            'deleted_at': DateTime.now().toIso8601String(),
+            'status': 'deleted',
+          })
+          .eq('id', terrainId);
+    } catch (e) {
+      rethrow;
+    }
   }
 
   int _toInt(dynamic value) {

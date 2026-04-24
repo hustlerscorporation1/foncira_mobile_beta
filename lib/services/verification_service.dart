@@ -7,6 +7,115 @@ import 'supabase_service.dart';
 class VerificationService {
   final SupabaseService _supabase = SupabaseService();
 
+  String _normalizeDocumentType(String raw) {
+    final value = raw.toLowerCase();
+
+    if (value.contains('aucun')) return 'aucun_document';
+    if (value.contains('ne sais pas') || value.contains('sais_pas')) {
+      return 'ne_sais_pas';
+    }
+    if (value.contains('titre')) return 'titre_foncier';
+    if (value.contains('logement')) return 'logement';
+    if (value.contains('convention')) return 'convention';
+    if (value.contains('reçu') || value.contains('recu')) return 'recu_vente';
+
+    return 'ne_sais_pas';
+  }
+
+  String _calculateRiskFromNormalizedDocument(String normalizedDocumentType) {
+    switch (normalizedDocumentType) {
+      case 'titre_foncier':
+      case 'logement':
+        return 'faible';
+      case 'convention':
+      case 'recu_vente':
+        return 'modere';
+      case 'aucun_document':
+      case 'ne_sais_pas':
+      default:
+        return 'eleve';
+    }
+  }
+
+  bool _isMissingColumnError(Object error, List<String> columnNames) {
+    final text = error.toString();
+    return text.contains('PGRST204') &&
+        columnNames.any((name) => text.contains("'$name'"));
+  }
+
+  Future<Map<String, dynamic>> _insertVerificationCompat({
+    required bool isMarketplace,
+    required String terrainTitle,
+    required String terrainLocation,
+    required double priceFCFA,
+    required String documentType,
+    String? sharingLink,
+    String? terrainId,
+  }) async {
+    final now = DateTime.now();
+    final normalizedDocumentType = _normalizeDocumentType(documentType);
+    final riskLevel = _calculateRiskFromNormalizedDocument(
+      normalizedDocumentType,
+    );
+
+    // Newer schema variant (client_status + terrain_document_type + terrain_id_foncira)
+    final modernPayload = {
+      'user_id': _supabase.currentUserId,
+      'source': isMarketplace ? 'foncira_marketplace' : 'externe',
+      'client_status': 'receptionnee',
+      'terrain_title': terrainTitle,
+      'terrain_location': terrainLocation,
+      'terrain_price_fcfa': priceFCFA,
+      'terrain_document_type': normalizedDocumentType,
+      'sharing_link': sharingLink,
+      'client_risk_level': riskLevel,
+      'submitted_at': now.toIso8601String(),
+      'expected_delivery_at': now.add(Duration(days: 10)).toIso8601String(),
+      if (isMarketplace) 'terrain_id_foncira': terrainId,
+    };
+
+    try {
+      return await _supabase.client
+          .from('verifications')
+          .insert(modernPayload)
+          .select()
+          .single();
+    } catch (modernError) {
+      final shouldTryLegacy = _isMissingColumnError(modernError, [
+        'terrain_document_type',
+        'client_status',
+        'terrain_id_foncira',
+      ]);
+
+      if (!shouldTryLegacy) {
+        rethrow;
+      }
+
+      // Legacy schema variant (status + document_type + terrain_id)
+      final legacyPayload = {
+        'user_id': _supabase.currentUserId,
+        'source': isMarketplace ? 'foncira_marketplace' : 'externe',
+        'status': 'receptionnee',
+        'client_status': 'receptionnee',
+        'terrain_title': terrainTitle,
+        'terrain_location': terrainLocation,
+        'terrain_price_fcfa': priceFCFA,
+        'document_type': normalizedDocumentType,
+        'sharing_link': sharingLink,
+        'risk_level': riskLevel,
+        'submitted_at': now.toIso8601String(),
+        'expected_delivery_at': now.add(Duration(days: 10)).toIso8601String(),
+        if (isMarketplace) 'terrain_id': terrainId,
+      };
+
+      return await _supabase.client
+          .from('verifications')
+          .insert(legacyPayload)
+          .select()
+          .single();
+    }
+  }
+
   // ── Create verification from external terrain ───────────────
   Future<String?> createExternalVerification({
     required String terrainTitle,
@@ -20,26 +129,17 @@ class VerificationService {
         throw Exception('User not authenticated');
       }
 
-      final response = await _supabase.client
-          .from('verifications')
-          .insert({
-            'user_id': _supabase.currentUserId,
-            'source': 'externe',
-            'status': 'receptionnee',
-            'terrain_title': terrainTitle,
-            'terrain_location': terrainLocation,
-            'terrain_price_fcfa': priceFCFA,
-            'terrain_price_usd': _supabase.convertFcfaToUsd(priceFCFA),
-            'document_type': documentType,
-            'sharing_link': sharingLink,
-            'risk_level': _supabase.calculateRiskLevel(documentType),
-            'submitted_at': DateTime.now().toIso8601String(),
-            'expected_delivery_at': DateTime.now()
-                .add(Duration(days: 10))
-                .toIso8601String(),
-          })
-          .select()
-          .single();
+      final response = await _insertVerificationCompat(
+        isMarketplace: false,
+        terrainTitle: terrainTitle,
+        terrainLocation: terrainLocation,
+        priceFCFA: priceFCFA,
+        documentType: documentType,
+        sharingLink: sharingLink,
+      );
+
+      // Keep tracking UX consistent between marketplace and external flow.
+      await _createInitialMilestones(response['id']);
 
       return response['id'];
     } catch (e) {
@@ -61,27 +161,15 @@ class VerificationService {
         throw Exception('User not authenticated');
       }
 
-      final response = await _supabase.client
-          .from('verifications')
-          .insert({
-            'user_id': _supabase.currentUserId,
-            'terrain_id': terrainId,
-            'source': 'foncira_marketplace',
-            'status': 'receptionnee',
-            'terrain_title': terrainTitle,
-            'terrain_location': terrainLocation,
-            'terrain_price_fcfa': priceFCFA,
-            'terrain_price_usd': _supabase.convertFcfaToUsd(priceFCFA),
-            'document_type': documentType,
-            'sharing_link': sharingLink,
-            'risk_level': _supabase.calculateRiskLevel(documentType),
-            'submitted_at': DateTime.now().toIso8601String(),
-            'expected_delivery_at': DateTime.now()
-                .add(Duration(days: 10))
-                .toIso8601String(),
-          })
-          .select()
-          .single();
+      final response = await _insertVerificationCompat(
+        isMarketplace: true,
+        terrainId: terrainId,
+        terrainTitle: terrainTitle,
+        terrainLocation: terrainLocation,
+        priceFCFA: priceFCFA,
+        documentType: documentType,
+        sharingLink: sharingLink,
+      );
 
       // Auto-create milestones for J1, J3, J7, J10
       await _createInitialMilestones(response['id']);
@@ -232,19 +320,38 @@ class VerificationService {
   Future<void> _createInitialMilestones(String verificationId) async {
     try {
       final milestones = [
-        {'milestone_day': 'J1', 'description': 'Vérification administrative'},
-        {'milestone_day': 'J3', 'description': 'Visite terrain'},
-        {'milestone_day': 'J7', 'description': 'Vérification coutumière'},
-        {'milestone_day': 'J10', 'description': 'Rapport final'},
+        {'day': 1, 'label': 'J1', 'description': 'Demande validée'},
+        {'day': 3, 'label': 'J3', 'description': 'Vérification administrative'},
+        {'day': 5, 'label': 'J5', 'description': 'Vérification coutumière'},
+        {
+          'day': 7,
+          'label': 'J7',
+          'description': 'Vérification du voisinage & Géomètre',
+        },
+        {
+          'day': 10,
+          'label': 'J10',
+          'description': 'Décision du juriste & Rapport final',
+        },
       ];
 
       for (final milestone in milestones) {
-        await _supabase.client.from('verification_milestones').insert({
-          'verification_id': verificationId,
-          'milestone_day': milestone['milestone_day'],
-          'description': milestone['description'],
-          'status': 'en_attente',
-        });
+        try {
+          await _supabase.client.from('verification_milestones').insert({
+            'verification_id': verificationId,
+            'milestone_day': milestone['day'],
+            'milestone_name': milestone['label'],
+            'milestone_description': milestone['description'],
+            'status': 'en_attente',
+          });
+        } catch (_) {
+          await _supabase.client.from('verification_milestones').insert({
+            'verification_id': verificationId,
+            'milestone_day': milestone['label'],
+            'description': milestone['description'],
+            'status': 'en_attente',
+          });
+        }
       }
     } catch (e) {
       // Fail silently - milestones are optional

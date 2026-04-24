@@ -12,15 +12,19 @@ import '../providers/user_mode_provider.dart';
 import '../models/publish_state.dart';
 import '../models/terrain.dart';
 import '../component/terrain_card.dart';
+import '../component/notification_bell_button.dart';
+import '../component/price_row.dart';
 import '../services/terrain_seller_service.dart';
 import '../services/terrain_publish_service.dart';
 import '../services/seller_stats_service.dart';
+import '../utils/terrain_score_calculator.dart';
 
 import 'marketplace_page.dart';
 import 'why_foncira_page.dart';
 import 'request_verification_page.dart';
 import 'verification_tunnel_page.dart';
 import 'verification_tracking_page.dart';
+import 'favoris_foncira.dart';
 import 'terrain_detail_foncira.dart';
 import 'profile.dart';
 import 'carte.dart';
@@ -172,43 +176,11 @@ class _HomeContentState extends State<_HomeContent> {
   @override
   void initState() {
     super.initState();
-    // Show tooltip after first frame if not seen
+    // Load terrains after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       context.read<TerrainProvider>().loadTerrains();
-      final modeProvider = context.read<UserModeProvider>();
-      if (modeProvider.shouldShowModeTooltip && modeProvider.isBuyerMode) {
-        _showModeTooltip();
-        modeProvider.markModeTooltipSeen();
-      }
     });
-  }
-
-  void _showModeTooltip() {
-    if (!mounted) return;
-    try {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'Appuyez ici pour passer en mode vendeur',
-            style: GoogleFonts.inter(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Colors.white,
-            ),
-          ),
-          backgroundColor: kSuccess.withOpacity(0.9),
-          duration: const Duration(seconds: 3),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(20, 0, 20, 80),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      );
-    } catch (e) {
-      // Silently fail if context not available
-    }
   }
 
   @override
@@ -226,98 +198,27 @@ class _HomeContentState extends State<_HomeContent> {
             _buildHeader(context, verifProvider),
             const SizedBox(height: 20),
 
-            // ── Context Text + Mode Pill (side by side) ──
+            // ── Context Text ──
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Left: Statistics text (expandable)
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Au Togo, 7 terrains sur 10 présentent un risque juridique.',
-                          style: GoogleFonts.inter(
-                            fontSize: 15,
-                            color: kTextPrimary.withOpacity(0.6),
-                            height: 1.4,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'FONCIRA vérifie le vôtre avant tout paiement.',
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: kPrimaryLight.withOpacity(0.7),
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
+                  Text(
+                    'Au Togo, 7 terrains sur 10 présentent un risque juridique.',
+                    style: GoogleFonts.inter(
+                      fontSize: 15,
+                      color: kTextPrimary.withOpacity(0.6),
+                      height: 1.4,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // Right: Mode Selection Pill (fixed width)
-                  GestureDetector(
-                    onTap: () => _showModeSelectionSheet(modeProvider),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 150),
-                      transitionBuilder: (child, animation) {
-                        return FadeTransition(opacity: animation, child: child);
-                      },
-                      child: Container(
-                        key: ValueKey(modeProvider.currentMode),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: modeProvider.isBuyerMode
-                              ? kPrimary.withOpacity(0.15)
-                              : kSuccess.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: modeProvider.isBuyerMode
-                                ? kPrimary.withOpacity(0.3)
-                                : kSuccess.withOpacity(0.3),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              modeProvider.isBuyerMode
-                                  ? Icons.person_rounded
-                                  : Icons.sell_rounded,
-                              size: 14,
-                              color: modeProvider.isBuyerMode
-                                  ? kPrimary
-                                  : kSuccess,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              modeProvider.isBuyerMode ? 'Acheteur' : 'Vendeur',
-                              style: GoogleFonts.inter(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: modeProvider.isBuyerMode
-                                    ? kPrimary
-                                    : kSuccess,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.expand_more_rounded,
-                              size: 14,
-                              color: modeProvider.isBuyerMode
-                                  ? kPrimary
-                                  : kSuccess,
-                            ),
-                          ],
-                        ),
-                      ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'FONCIRA vérifie le vôtre avant tout paiement.',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      color: kPrimaryLight.withOpacity(0.7),
+                      height: 1.4,
                     ),
                   ),
                 ],
@@ -410,177 +311,6 @@ class _HomeContentState extends State<_HomeContent> {
             const SizedBox(height: 100),
           ],
         ),
-      ),
-    );
-  }
-
-  // ──────────────────────────────────────────────────────────────
-  //  MODE SELECTION BOTTOM SHEET
-  // ──────────────────────────────────────────────────────────────
-  void _showModeSelectionSheet(UserModeProvider modeProvider) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withOpacity(0.4),
-      isScrollControlled: true,
-      builder: (context) {
-        return Container(
-          decoration: BoxDecoration(
-            color: kDarkCard,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(28),
-              topRight: Radius.circular(28),
-            ),
-            border: Border(
-              top: BorderSide(color: kBorderDark, width: 1),
-              left: BorderSide(color: kBorderDark, width: 1),
-              right: BorderSide(color: kBorderDark, width: 1),
-            ),
-          ),
-          padding: EdgeInsets.fromLTRB(
-            20,
-            28,
-            20,
-            20 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Mode cards (large layout)
-              Row(
-                children: [
-                  // Acheteur card
-                  Expanded(
-                    child: _buildModeOptionCard(
-                      icon: Icons.person_outline_rounded,
-                      icon_size: 32,
-                      title: 'Acheteur',
-                      subtitle: 'Explorez et vérifiez\ndes terrains',
-                      isActive: modeProvider.isBuyerMode,
-                      color: kPrimary,
-                      onTap: () {
-                        if (!modeProvider.isBuyerMode) {
-                          modeProvider.switchMode(UserMode.buyer);
-                          Navigator.pop(context);
-                          _showModeChangedSnackbar('Acheteur');
-                        } else {
-                          Navigator.pop(context);
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Vendeur card
-                  Expanded(
-                    child: _buildModeOptionCard(
-                      icon: Icons.sell_rounded,
-                      icon_size: 32,
-                      title: 'Vendeur',
-                      subtitle: 'Publiez et gérez\nvos annonces',
-                      isActive: modeProvider.isSellerMode,
-                      color: kSuccess,
-                      onTap: () {
-                        if (!modeProvider.isSellerMode) {
-                          modeProvider.switchMode(UserMode.seller);
-                          Navigator.pop(context);
-                          _showModeChangedSnackbar('Vendeur');
-                        } else {
-                          Navigator.pop(context);
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // Mode option card widget
-  Widget _buildModeOptionCard({
-    required IconData icon,
-    required double icon_size,
-    required String title,
-    required String subtitle,
-    required bool isActive,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isActive ? color.withOpacity(0.12) : kDarkBg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isActive ? color : kBorderDark,
-            width: isActive ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: isActive ? color.withOpacity(0.2) : kDarkCardLight,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isActive ? color.withOpacity(0.3) : kBorderDark,
-                  width: 1,
-                ),
-              ),
-              child: Icon(icon, color: color, size: icon_size),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: kTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: kTextMuted,
-                fontWeight: FontWeight.w400,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Show snackbar on mode change
-  void _showModeChangedSnackbar(String modeName) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Passé en mode $modeName',
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: (modeName == 'Vendeur' ? kSuccess : kPrimary)
-            .withOpacity(0.9),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 50),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -741,6 +471,16 @@ class _HomeContentState extends State<_HomeContent> {
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => const WhyFonciraPage()),
+            ),
+          ),
+          const SizedBox(width: 10),
+          _QuickActionCard(
+            icon: Icons.favorite_rounded,
+            label: 'Favoris',
+            color: kDanger,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FavorisPageFoncira()),
             ),
           ),
           const SizedBox(width: 10),
@@ -1019,9 +759,9 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
   final TerrainSellerService _terrainService = TerrainSellerService();
   List<Map<String, dynamic>> _terrains = [];
   Map<String, dynamic> _metrics = {
-    'views_week': 0,
+    'views_total': 0,
     'verification_requests': 0,
-    'direct_contacts': 0,
+    'sold_count': 0,
   };
   bool _isLoading = true;
 
@@ -1083,6 +823,57 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
     }
   }
 
+  Future<void> _suspendTerrain(String terrainId) async {
+    try {
+      await _terrainService.suspendTerrain(terrainId);
+      _showSnackBar('Terrain suspendu temporairement', Colors.orange);
+      _refreshData();
+    } catch (e) {
+      _showSnackBar('Erreur: $e', Colors.red);
+    }
+  }
+
+  Future<void> _deleteTerrain(String terrainId) async {
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer le terrain?'),
+        content: const Text(
+          'Cette action est irréversible. Le terrain sera définitivement supprimé.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await _terrainService.deleteTerrain(terrainId);
+        _showSnackBar('Terrain supprimé définitivement', Colors.red);
+        _refreshData();
+      } catch (e) {
+        _showSnackBar('Erreur: $e', Colors.red);
+      }
+    }
+  }
+
+  void _modifyTerrain(Map<String, dynamic> terrain) {
+    // Show simple edit dialog for terrain details
+    showDialog(
+      context: context,
+      builder: (context) => _buildModifyTerrainDialog(context, terrain),
+    );
+  }
+
   void _showSnackBar(String message, Color backgroundColor) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1093,7 +884,10 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
     );
   }
 
-  void _showContextMenu(BuildContext context, Map<String, dynamic> terrain) {
+  Future<void> _showContextMenu(
+    BuildContext context,
+    Map<String, dynamic> terrain,
+  ) async {
     final RenderBox button = context.findRenderObject() as RenderBox;
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
@@ -1108,33 +902,163 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
       Offset.zero & overlay.size,
     );
 
-    showMenu(
+    final selectedAction = await showMenu<String>(
       context: context,
       position: position,
-      items: [
-        PopupMenuItem(
-          child: const Text('Modifier'),
-          onTap: () {
-            _showSnackBar('Modification en cours...', Colors.blue);
-          },
+      items: const <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(value: 'modify', child: Text('Modifier')),
+        PopupMenuItem<String>(value: 'feature', child: Text('Mettre en avant')),
+        PopupMenuItem<String>(
+          value: 'sold',
+          child: Text('Marquer comme vendu'),
         ),
-        PopupMenuItem(
-          child: const Text('Mettre en avant'),
-          onTap: () {
-            _featureTerrain(terrain['id']);
-          },
+        PopupMenuItem<String>(value: 'suspend', child: Text('Suspendre')),
+        PopupMenuItem<String>(value: 'archive', child: Text('Archiver')),
+        PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Text('Supprimer', style: TextStyle(color: Colors.red)),
         ),
-        PopupMenuItem(
-          child: const Text('Marquer comme vendu'),
-          onTap: () {
-            _markAsSold(terrain['id']);
-          },
+      ],
+    );
+
+    if (selectedAction == null || !mounted) return;
+
+    if (selectedAction == 'modify') {
+      _modifyTerrain(terrain);
+      return;
+    }
+
+    final terrainId = terrain['id']?.toString();
+    if (terrainId == null || terrainId.isEmpty) {
+      _showSnackBar('ID du terrain introuvable', Colors.red);
+      return;
+    }
+
+    switch (selectedAction) {
+      case 'feature':
+        await _featureTerrain(terrainId);
+        break;
+      case 'sold':
+        await _markAsSold(terrainId);
+        break;
+      case 'suspend':
+        await _suspendTerrain(terrainId);
+        break;
+      case 'archive':
+        await _archiveTerrain(terrainId);
+        break;
+      case 'delete':
+        await _deleteTerrain(terrainId);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /// Build a simple modify terrain dialog with editable fields
+  Widget _buildModifyTerrainDialog(
+    BuildContext context,
+    Map<String, dynamic> terrain,
+  ) {
+    final titleController = TextEditingController(
+      text: (terrain['title'] ?? terrain['titre'] ?? '').toString(),
+    );
+    final descriptionController = TextEditingController(
+      text: (terrain['description'] ?? '').toString(),
+    );
+    final priceUsdController = TextEditingController(
+      text: (terrain['price_usd'] ?? terrain['prix_usd'] ?? '').toString(),
+    );
+    final priceFcfaController = TextEditingController(
+      text: (terrain['price_fcfa'] ?? terrain['prix_fcfa'] ?? '').toString(),
+    );
+    final areaController = TextEditingController(
+      text: (terrain['area_sqm'] ?? '').toString(),
+    );
+
+    return AlertDialog(
+      title: const Text('Modifier l\'annonce'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              decoration: const InputDecoration(labelText: 'Titre'),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: descriptionController,
+              decoration: const InputDecoration(labelText: 'Description'),
+              maxLines: 4,
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: priceUsdController,
+                    decoration: const InputDecoration(labelText: 'Prix (USD)'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: priceFcfaController,
+                    decoration: const InputDecoration(labelText: 'Prix (FCFA)'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: areaController,
+              decoration: const InputDecoration(labelText: 'Superficie (m²)'),
+              keyboardType: TextInputType.number,
+            ),
+          ],
         ),
-        PopupMenuItem(
-          child: const Text('Archiver'),
-          onTap: () {
-            _archiveTerrain(terrain['id']);
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Annuler'),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            try {
+              await _terrainService.updateTerrain(
+                terrainId: terrain['id'],
+                title: titleController.text.isNotEmpty
+                    ? titleController.text
+                    : null,
+                description: descriptionController.text.isNotEmpty
+                    ? descriptionController.text
+                    : null,
+                priceUsd: priceUsdController.text.isNotEmpty
+                    ? double.parse(priceUsdController.text)
+                    : null,
+                priceFcfa: priceFcfaController.text.isNotEmpty
+                    ? int.parse(priceFcfaController.text)
+                    : null,
+                areaSqm: areaController.text.isNotEmpty
+                    ? double.parse(areaController.text)
+                    : null,
+              );
+              if (mounted) {
+                Navigator.pop(context);
+                _showSnackBar('Annonce modifiée avec succès', Colors.green);
+                _refreshData();
+              }
+            } catch (e) {
+              _showSnackBar('Erreur: $e', Colors.red);
+            }
           },
+          child: const Text('Sauvegarder'),
         ),
       ],
     );
@@ -1163,9 +1087,10 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Title Row + Mode Pill ──
+                // ── Title Row + Mode Pill + Notification Bell ──
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     // Left: Title (expandable)
                     Expanded(
@@ -1192,103 +1117,41 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    // Right: Mode Selection Pill (fixed width)
-                    GestureDetector(
-                      onTap: () => _showModeSelectionSheet(modeProvider),
-                      child: AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 150),
-                        transitionBuilder: (child, animation) {
-                          return FadeTransition(
-                            opacity: animation,
-                            child: child,
-                          );
-                        },
-                        child: Container(
-                          key: ValueKey(modeProvider.currentMode),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: modeProvider.isBuyerMode
-                                ? kPrimary.withOpacity(0.15)
-                                : kSuccess.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: modeProvider.isBuyerMode
-                                  ? kPrimary.withOpacity(0.3)
-                                  : kSuccess.withOpacity(0.3),
-                              width: 1,
-                            ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                modeProvider.isBuyerMode
-                                    ? Icons.person_rounded
-                                    : Icons.sell_rounded,
-                                size: 14,
-                                color: modeProvider.isBuyerMode
-                                    ? kPrimary
-                                    : kSuccess,
-                              ),
-                              const SizedBox(width: 6),
-                              Text(
-                                modeProvider.isBuyerMode
-                                    ? 'Acheteur'
-                                    : 'Vendeur',
-                                style: GoogleFonts.inter(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: modeProvider.isBuyerMode
-                                      ? kPrimary
-                                      : kSuccess,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                              Icon(
-                                Icons.expand_more_rounded,
-                                size: 14,
-                                color: modeProvider.isBuyerMode
-                                    ? kPrimary
-                                    : kSuccess,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                    // Right: Controls (Notification Bell)
+                    const NotificationBellButton(),
                   ],
                 ),
                 const SizedBox(height: 24),
 
                 // ──────────────────────────────────────────────────
-                // METRIC CARDS SECTION
+                // METRIC CARDS SECTION (3 columns)
                 // ──────────────────────────────────────────────────
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildMetricCard(
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildMetricCard(
                         icon: Icons.visibility_rounded,
-                        label: 'Vues cette semaine',
-                        value: '${_metrics['views_week'] ?? 0}',
+                        label: 'Vues totales',
+                        value: '${_metrics['views_total'] ?? 0}',
                       ),
-                      const SizedBox(width: 12),
-                      _buildMetricCard(
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMetricCard(
                         icon: Icons.check_circle_rounded,
-                        label: 'Demandes vérification',
+                        label: 'Demandes vérif.',
                         value: '${_metrics['verification_requests'] ?? 0}',
                       ),
-                      const SizedBox(width: 12),
-                      _buildMetricCard(
-                        icon: Icons.mail_rounded,
-                        label: 'Contacts directs',
-                        value: '${_metrics['direct_contacts'] ?? 0}',
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildMetricCard(
+                        icon: Icons.sell_rounded,
+                        label: 'Biens vendus',
+                        value: '${_metrics['sold_count'] ?? 0}',
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 32),
 
@@ -1431,6 +1294,27 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
         ? priceFcfaRaw.toDouble()
         : double.tryParse(priceFcfaRaw.toString()) ?? 0;
 
+    // Calculate reliability score
+    final score = TerrainScoreCalculator.calculateScore(
+      title: title,
+      description: terrain['description'] as String?,
+      photosCount: (terrain['additional_photos'] as List?)?.length ?? 0,
+      documentsCount: 0, // TODO: Count actual documents when available
+      location: terrain['location'] as String?,
+      quartier: terrain['quartier'] as String?,
+      ville: location,
+      priceFcfa: priceFcfa,
+      priceUsd: priceUsd,
+      areaSqm: terrain['area_sqm'] is num
+          ? (terrain['area_sqm'] as num).toInt()
+          : int.tryParse((terrain['area_sqm'] ?? '').toString()) ?? 0,
+    );
+    final scoreLabel = TerrainScoreCalculator.getScoreLabel(score);
+    final scoreColorHex = TerrainScoreCalculator.getScoreColor(score);
+    final scoreColor = Color(
+      int.parse(scoreColorHex.replaceFirst('#', '0xff')),
+    );
+
     // Determine status badge color and text
     Color statusColor = kTextMuted;
     String statusText = 'Brouillon';
@@ -1512,22 +1396,11 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '\$${priceUsd.toStringAsFixed(0)}',
-                      style: GoogleFonts.outfit(
-                        color: kPrimaryLight,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    Text(
-                      '${priceFcfa.toStringAsFixed(0)} FCFA',
-                      style: GoogleFonts.inter(color: kTextMuted, fontSize: 11),
-                    ),
-                  ],
+                PriceRow(
+                  priceUsd: priceUsd,
+                  priceFcfa: priceFcfa,
+                  usdFontSize: 18,
+                  fcfaFontSize: 11,
                 ),
                 // Badges
                 Wrap(
@@ -1557,23 +1430,65 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
                     if (verificationStatus != 'non_verifie')
                       Container(
                         padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
+                          horizontal: 10,
+                          vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.2),
-                          border: Border.all(color: Colors.green),
+                          color: Colors.white,
+                          border: Border.all(color: Colors.green, width: 1.5),
                           borderRadius: BorderRadius.circular(6),
                         ),
-                        child: Text(
-                          'Verifie',
-                          style: GoogleFonts.inter(
-                            color: Colors.green,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.verified_rounded,
+                              color: Colors.green,
+                              size: 14,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Vérifié',
+                              style: GoogleFonts.inter(
+                                color: Colors.green,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                    // Score badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: scoreColor.withOpacity(0.15),
+                        border: Border.all(color: scoreColor, width: 1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.show_chart_rounded,
+                            color: scoreColor,
+                            size: 12,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '$score/100',
+                            style: GoogleFonts.inter(
+                              color: scoreColor,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     // Performance indicator
                     Container(
                       padding: const EdgeInsets.all(4),
@@ -1621,174 +1536,6 @@ class _SellerAnnouncesTabState extends State<_SellerAnnouncesTab> {
       ),
     );
   }
-
-  void _showModeSelectionSheet(UserModeProvider modeProvider) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      barrierColor: Colors.black.withOpacity(0.4),
-      isScrollControlled: true,
-      builder: (context) {
-        return Container(
-          decoration: BoxDecoration(
-            color: kDarkCard,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(28),
-              topRight: Radius.circular(28),
-            ),
-            border: Border(
-              top: BorderSide(color: kBorderDark, width: 1),
-              left: BorderSide(color: kBorderDark, width: 1),
-              right: BorderSide(color: kBorderDark, width: 1),
-            ),
-          ),
-          padding: EdgeInsets.fromLTRB(
-            20,
-            28,
-            20,
-            20 + MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Mode cards (large layout)
-              Row(
-                children: [
-                  // Acheteur card
-                  Expanded(
-                    child: _buildModeOptionCard(
-                      icon: Icons.person_outline_rounded,
-                      icon_size: 32,
-                      title: 'Acheteur',
-                      subtitle: 'Explorez et vérifiez\ndes terrains',
-                      isActive: modeProvider.isBuyerMode,
-                      color: kPrimary,
-                      onTap: () {
-                        if (!modeProvider.isBuyerMode) {
-                          modeProvider.switchMode(UserMode.buyer);
-                          Navigator.pop(context);
-                          _showModeChangedSnackbar('Acheteur');
-                        } else {
-                          Navigator.pop(context);
-                        }
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  // Vendeur card
-                  Expanded(
-                    child: _buildModeOptionCard(
-                      icon: Icons.sell_rounded,
-                      icon_size: 32,
-                      title: 'Vendeur',
-                      subtitle: 'Publiez et gérez\nvos annonces',
-                      isActive: modeProvider.isSellerMode,
-                      color: kSuccess,
-                      onTap: () {
-                        if (!modeProvider.isSellerMode) {
-                          modeProvider.switchMode(UserMode.seller);
-                          Navigator.pop(context);
-                          _showModeChangedSnackbar('Vendeur');
-                        } else {
-                          Navigator.pop(context);
-                        }
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // Mode option card widget
-  Widget _buildModeOptionCard({
-    required IconData icon,
-    required double icon_size,
-    required String title,
-    required String subtitle,
-    required bool isActive,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isActive ? color.withOpacity(0.12) : kDarkBg,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isActive ? color : kBorderDark,
-            width: isActive ? 2 : 1,
-          ),
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: isActive ? color.withOpacity(0.2) : kDarkCardLight,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: isActive ? color.withOpacity(0.3) : kBorderDark,
-                  width: 1,
-                ),
-              ),
-              child: Icon(icon, color: color, size: icon_size),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              style: GoogleFonts.inter(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-                color: kTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.inter(
-                fontSize: 12,
-                color: kTextMuted,
-                fontWeight: FontWeight.w400,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // Show snackbar on mode change
-  void _showModeChangedSnackbar(String modeName) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Passé en mode $modeName',
-          style: GoogleFonts.inter(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
-          ),
-        ),
-        backgroundColor: (modeName == 'Vendeur' ? kSuccess : kPrimary)
-            .withOpacity(0.9),
-        duration: const Duration(seconds: 2),
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(20, 0, 20, 50),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      ),
-    );
-  }
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -1815,6 +1562,21 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
   late TextEditingController descriptionController;
 
   bool isPublishing = false;
+  bool? _selectedFeaturedOption;
+
+  // Document upload properties
+  final Map<String, File?> _documentFiles = {
+    'titre_foncier': null,
+    'plan_terrain': null,
+    'autorisation_vente': null,
+    'recu_achat': null,
+  };
+  final Map<String, bool> _documentUploading = {
+    'titre_foncier': false,
+    'plan_terrain': false,
+    'autorisation_vente': false,
+    'recu_achat': false,
+  };
 
   @override
   void initState() {
@@ -1835,6 +1597,229 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
     prixController.dispose();
     descriptionController.dispose();
     super.dispose();
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Document Management Methods
+  // ──────────────────────────────────────────────────────────────
+
+  String _getDocumentLabel(String category) {
+    switch (category) {
+      case 'titre_foncier':
+        return 'Titre foncier';
+      case 'plan_terrain':
+        return 'Plan du terrain';
+      case 'autorisation_vente':
+        return 'Autorisation de vente';
+      case 'recu_achat':
+        return 'Reçu d\'achat';
+      default:
+        return category;
+    }
+  }
+
+  IconData _getDocumentIcon(String fileName) {
+    if (fileName.toLowerCase().endsWith('.pdf')) {
+      return Icons.picture_as_pdf_rounded;
+    }
+    return Icons.image_rounded;
+  }
+
+  bool _isValidDocumentFormat(String fileName) {
+    final name = fileName.toLowerCase();
+    return name.endsWith('.pdf') ||
+        name.endsWith('.jpg') ||
+        name.endsWith('.jpeg') ||
+        name.endsWith('.png');
+  }
+
+  Future<void> _pickDocument(String category) async {
+    try {
+      // First pick the from file system
+      final ImagePicker picker = ImagePicker();
+
+      // Show dialog to choose between photo library or file picker
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Sélectionner un document'),
+          content: const Text('Choisissez d\'où importer votre document'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                // Pick from gallery
+                final pickedFile = await picker.pickImage(
+                  source: ImageSource.gallery,
+                );
+                if (pickedFile != null) {
+                  await _uploadDocument(category, File(pickedFile.path));
+                }
+              },
+              child: const Text('Galerie photo'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                // In a real app, use file_picker for PDF support
+                // For now, show a message
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'Sélectionnez une image (PDF sera disponible bientôt)',
+                    ),
+                  ),
+                );
+              },
+              child: const Text('Fichier (PDF)'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+    }
+  }
+
+  Future<void> _uploadDocument(String category, File file) async {
+    if (!_isValidDocumentFormat(file.path)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Format accepté: PDF, JPG, PNG'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    final fileSize = await file.length();
+    if (fileSize > 10 * 1024 * 1024) {
+      // 10 MB max
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Taille maximale: 10 Mo'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _documentUploading[category] = true;
+    });
+
+    try {
+      // Upload to Supabase Storage
+      final fileName = '${category}_${DateTime.now().millisecondsSinceEpoch}';
+      final url = await _publishService.uploadDocument(file, fileName);
+
+      if (!mounted) return;
+
+      // Update publish state
+      final isRequired = [
+        'titre_foncier',
+        'plan_terrain',
+        'autorisation_vente',
+      ].contains(category);
+
+      if (isRequired) {
+        final updatedRequired = Map<String, String>.from(
+          publishState.requiredDocuments,
+        );
+        updatedRequired[category] = url;
+        publishState = publishState.copyWith(
+          requiredDocuments: updatedRequired,
+        );
+      } else {
+        final updatedOptional = Map<String, String>.from(
+          publishState.optionalDocuments,
+        );
+        updatedOptional[category] = url;
+        publishState = publishState.copyWith(
+          optionalDocuments: updatedOptional,
+        );
+      }
+
+      setState(() {
+        _documentUploading[category] = false;
+        _documentFiles[category] = file;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('✅ ${_getDocumentLabel(category)} uploadé'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      setState(() {
+        _documentUploading[category] = false;
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+    }
+  }
+
+  Future<void> _removeDocument(String category) async {
+    // Confirm deletion
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer le document?'),
+        content: Text(
+          'Êtes-vous sûr de vouloir supprimer ${_getDocumentLabel(category)}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuler'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Supprimer', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      final isRequired = [
+        'titre_foncier',
+        'plan_terrain',
+        'autorisation_vente',
+      ].contains(category);
+
+      if (isRequired) {
+        final updatedRequired = Map<String, String>.from(
+          publishState.requiredDocuments,
+        );
+        updatedRequired.remove(category);
+        publishState = publishState.copyWith(
+          requiredDocuments: updatedRequired,
+        );
+      } else {
+        final updatedOptional = Map<String, String>.from(
+          publishState.optionalDocuments,
+        );
+        updatedOptional.remove(category);
+        publishState = publishState.copyWith(
+          optionalDocuments: updatedOptional,
+        );
+      }
+
+      _documentFiles[category] = null;
+    });
   }
 
   void _goToStep(int step) {
@@ -2022,9 +2007,31 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
   }
 
   Future<void> _publishTerrain({required bool featured}) async {
-    if (!publishState.hasMinPhotos()) {
+    if (_selectedFeaturedOption == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Minimum 3 photos requises')),
+        const SnackBar(
+          content: Text(
+            'Choisissez une option de publication avant de continuer',
+          ),
+        ),
+      );
+      return;
+    }
+
+    if (!publishState.hasMinPhotos()) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Minimum 1 photo requise')));
+      return;
+    }
+
+    // Final validation: required documents
+    if (!publishState.hasAllRequiredDocuments()) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Tous les documents obligatoires sont requis'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -2032,28 +2039,27 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
     setState(() => isPublishing = true);
 
     try {
-      // Save description
       final finalState = publishState.copyWith(
         description: descriptionController.text,
+        isPublished: false,
+        isFeatured: featured,
       );
 
-      // Publish to Supabase
       await _publishService.publishTerrain(finalState, featured: featured);
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           content: Text(
-            featured
-                ? 'Terrain publié et mis en avant!'
-                : 'Terrain publié avec succès!',
+            'Votre terrain a été soumis. Notre équipe le valide sous 24h. '
+            'Vous serez notifié dès qu\'il est en ligne.',
           ),
           backgroundColor: Colors.green,
+          duration: Duration(seconds: 5),
         ),
       );
 
-      // Navigate back to announcements tab
       final homeState = context
           .findAncestorStateOfType<_FonciraHomePageState>();
       if (homeState != null) {
@@ -2177,11 +2183,19 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
       case 1:
         return publishState.hasMinPhotos() ? () => _goToStep(2) : null;
       case 2:
-        return () => _submitStep2();
+        // Validate step 2: essential info + required documents
+        if (!publishState.isEssentialInfoComplete()) {
+          return null;
+        }
+        if (!publishState.hasAllRequiredDocuments()) {
+          return null;
+        }
+        return () => _goToStep(3);
       case 3:
         return () => _goToStep(4);
       case 4:
-        return null; // Handled by bottom sheet
+        if (_selectedFeaturedOption == null) return null;
+        return () => _publishTerrain(featured: _selectedFeaturedOption!);
       default:
         return null;
     }
@@ -2207,7 +2221,7 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Ajoutez 3 à 8 photos',
+          'Ajoutez 1 à 8 photos',
           style: GoogleFonts.outfit(
             color: kTextPrimary,
             fontSize: 20,
@@ -2241,7 +2255,7 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
               ),
               const SizedBox(width: 12),
               Text(
-                '${publishState.photoUrls.length}/3-8 photos',
+                '${publishState.photoUrls.length}/1-8 photos',
                 style: GoogleFonts.inter(
                   color: publishState.hasMinPhotos() ? kSuccess : Colors.orange,
                   fontWeight: FontWeight.w500,
@@ -2484,6 +2498,344 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
         ),
         const SizedBox(height: 24),
 
+        // ──────────────────────────────────────────────────────────────
+        // DOCUMENTS OBLIGATOIRES SECTION
+        // ──────────────────────────────────────────────────────────────
+        Text(
+          'Documents obligatoires',
+          style: GoogleFonts.outfit(
+            color: kTextPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Téléchargez les 3 documents obligatoires pour continuer.',
+          style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
+        ),
+        const SizedBox(height: 16),
+
+        // Progress indicator
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: publishState.hasAllRequiredDocuments()
+                ? kSuccess.withOpacity(0.1)
+                : Colors.orange.withOpacity(0.1),
+            border: Border.all(
+              color: publishState.hasAllRequiredDocuments()
+                  ? kSuccess
+                  : Colors.orange,
+            ),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Icon(
+                publishState.hasAllRequiredDocuments()
+                    ? Icons.check_circle
+                    : Icons.info,
+                color: publishState.hasAllRequiredDocuments()
+                    ? kSuccess
+                    : Colors.orange,
+              ),
+              const SizedBox(width: 12),
+              Text(
+                '${publishState.uploadedRequiredDocumentsCount}/3 documents obligatoires',
+                style: GoogleFonts.inter(
+                  color: publishState.hasAllRequiredDocuments()
+                      ? kSuccess
+                      : Colors.orange,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // Required documents
+        ...[
+          ('titre_foncier', 'Titre foncier'),
+          ('plan_terrain', 'Plan du terrain'),
+          ('autorisation_vente', 'Autorisation de vente'),
+        ].map((entry) {
+          final category = entry.$1;
+          final label = entry.$2;
+          final isUploaded = publishState.requiredDocuments.containsKey(
+            category,
+          );
+          final isUploading = _documentUploading[category] ?? false;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kDarkCard,
+                border: Border.all(color: isUploaded ? kSuccess : kBorderDark),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header with label and status
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          label,
+                          style: GoogleFonts.inter(
+                            color: kTextPrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      if (isUploaded)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: kSuccess.withOpacity(0.2),
+                            border: Border.all(color: kSuccess),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check, color: kSuccess, size: 14),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Uploadé',
+                                style: GoogleFonts.inter(
+                                  color: kSuccess,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+
+                  // File display or upload button
+                  if (isUploaded)
+                    Row(
+                      children: [
+                        Icon(
+                          _getDocumentIcon(
+                            publishState.requiredDocuments[category] ?? '',
+                          ),
+                          color: kPrimary,
+                          size: 16,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _documentFiles[category]?.path.split('/').last ??
+                                'Document uploadé',
+                            style: GoogleFonts.inter(
+                              color: kTextMuted,
+                              fontSize: 12,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: isUploading
+                              ? null
+                              : () => _removeDocument(category),
+                          child: Icon(Icons.close, color: Colors.red, size: 18),
+                        ),
+                      ],
+                    )
+                  else if (isUploading)
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            valueColor: AlwaysStoppedAnimation(kPrimary),
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Upload en cours...',
+                          style: GoogleFonts.inter(
+                            color: kTextMuted,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () => _pickDocument(category),
+                        icon: const Icon(Icons.cloud_upload_outlined),
+                        label: const Text('Sélectionner un fichier'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: kPrimary,
+                          side: BorderSide(color: kPrimary),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 24),
+
+        // OPTIONAL DOCUMENT SECTION
+        Text(
+          'Documents optionnels',
+          style: GoogleFonts.outfit(
+            color: kTextPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Fournissez des documents supplémentaires pour renforcer votre annonce.',
+          style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
+        ),
+        const SizedBox(height: 16),
+
+        // Optional document
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: kDarkCard,
+              border: Border.all(color: kBorderDark),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header with label and "Optional" badge
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Reçu d\'achat',
+                      style: GoogleFonts.inter(
+                        color: kTextPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: kTextMuted.withOpacity(0.2),
+                        border: Border.all(color: kTextMuted),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Optionnel',
+                        style: GoogleFonts.inter(
+                          color: kTextMuted,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // File display or upload button
+                if (publishState.optionalDocuments.containsKey('recu_achat'))
+                  Row(
+                    children: [
+                      Icon(
+                        _getDocumentIcon(
+                          publishState.optionalDocuments['recu_achat'] ?? '',
+                        ),
+                        color: kPrimary,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _documentFiles['recu_achat']?.path.split('/').last ??
+                              'Document uploadé',
+                          style: GoogleFonts.inter(
+                            color: kTextMuted,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: _documentUploading['recu_achat'] == true
+                            ? null
+                            : () => _removeDocument('recu_achat'),
+                        child: Icon(Icons.close, color: Colors.red, size: 18),
+                      ),
+                    ],
+                  )
+                else if (_documentUploading['recu_achat'] == true)
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation(kPrimary),
+                          strokeWidth: 2,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Upload en cours...',
+                        style: GoogleFonts.inter(
+                          color: kTextMuted,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _pickDocument('recu_achat'),
+                      icon: const Icon(Icons.cloud_upload_outlined),
+                      label: const Text('Sélectionner un fichier'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: kPrimary,
+                        side: BorderSide(color: kPrimary),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 24),
+
         // Type de document
         Text(
           'Type de document',
@@ -2576,11 +2928,14 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
   }
 
   Widget _buildStep4Summary() {
+    final isFreeSelected = _selectedFeaturedOption == false;
+    final isFeaturedSelected = _selectedFeaturedOption == true;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Récapitulatif',
+          'Recapitulatif',
           style: GoogleFonts.outfit(
             color: kTextPrimary,
             fontSize: 20,
@@ -2589,7 +2944,6 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
         ),
         const SizedBox(height: 24),
 
-        // Preview card
         Container(
           decoration: BoxDecoration(
             color: kDarkCard,
@@ -2599,7 +2953,6 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Photo
               if (publishState.photoUrls.isNotEmpty)
                 ClipRRect(
                   borderRadius: const BorderRadius.only(
@@ -2613,7 +2966,6 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
                     fit: BoxFit.cover,
                   ),
                 ),
-
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -2685,7 +3037,6 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
         ),
         const SizedBox(height: 32),
 
-        // Publication options
         Text(
           'Option de publication',
           style: GoogleFonts.inter(
@@ -2695,14 +3046,19 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
         ),
         const SizedBox(height: 12),
 
-        // Free option
         GestureDetector(
-          onTap: isPublishing ? null : () => _publishTerrain(featured: false),
+          onTap: isPublishing
+              ? null
+              : () {
+                  setState(() => _selectedFeaturedOption = false);
+                },
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: kPrimary.withOpacity(0.1),
-              border: Border.all(color: kPrimary),
+              color: isFreeSelected ? kPrimary.withOpacity(0.1) : kDarkCard,
+              border: Border.all(
+                color: isFreeSelected ? kPrimary : kBorderDark,
+              ),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -2718,20 +3074,17 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    if (isPublishing)
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(kPrimary),
-                        ),
-                      ),
+                    Icon(
+                      isFreeSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: isFreeSelected ? kPrimary : kTextMuted,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Votre terrain apparaîtra dans la marketplace',
+                  'Votre terrain sera soumis a verification avant affichage.',
                   style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
                 ),
               ],
@@ -2740,14 +3093,21 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
         ),
         const SizedBox(height: 12),
 
-        // Featured option
         GestureDetector(
-          onTap: isPublishing ? null : () => _publishFeaturedDialog(),
+          onTap: isPublishing
+              ? null
+              : () {
+                  setState(() => _selectedFeaturedOption = true);
+                },
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: kDarkCard,
-              border: Border.all(color: kBorderDark),
+              color: isFeaturedSelected
+                  ? Colors.amber.withOpacity(0.1)
+                  : kDarkCard,
+              border: Border.all(
+                color: isFeaturedSelected ? Colors.amber : kBorderDark,
+              ),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Column(
@@ -2756,96 +3116,43 @@ class _SellerPublishTabState extends State<_SellerPublishTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    Row(
                       children: [
-                        Row(
-                          children: [
-                            const Icon(
-                              Icons.star,
-                              color: Colors.amber,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Mettre en avant — 15 000 F/mois',
-                              style: GoogleFonts.outfit(
-                                color: kTextPrimary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
+                        const Icon(Icons.star, color: Colors.amber, size: 18),
+                        const SizedBox(width: 6),
                         Text(
-                          'Apparaît en haut de la marketplace',
-                          style: GoogleFonts.inter(
-                            color: kTextMuted,
-                            fontSize: 12,
+                          'Mettre en avant - 15 000 F/mois',
+                          style: GoogleFonts.outfit(
+                            color: kTextPrimary,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
                     ),
+                    Icon(
+                      isFeaturedSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_unchecked,
+                      color: isFeaturedSelected ? Colors.amber : kTextMuted,
+                    ),
                   ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Apparait en haut de la marketplace apres validation.',
+                  style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
                 ),
               ],
             ),
           ),
         ),
-      ],
-    );
-  }
+        const SizedBox(height: 12),
 
-  void _publishFeaturedDialog() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: kDarkCard,
-        title: Text(
-          'Mettre en avant',
-          style: GoogleFonts.outfit(color: kTextPrimary),
+        Text(
+          'Apres soumission, verification sous 24h. Puis publication sur la marketplace.',
+          style: GoogleFonts.inter(color: kTextMuted, fontSize: 12),
         ),
-        content: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Votre terrain sera mis en avant en haut de la marketplace pendant 1 mois.',
-              style: GoogleFonts.inter(color: kTextMuted),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.amber.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.amber),
-              ),
-              child: Text(
-                'Coût: 15 000 FCFA/mois (≈\$23)',
-                style: GoogleFonts.inter(
-                  color: Colors.amber,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text('Annuler', style: GoogleFonts.inter(color: kTextMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _publishTerrain(featured: true);
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
-            child: Text('Confirmer', style: GoogleFonts.inter(color: kDarkBg)),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }

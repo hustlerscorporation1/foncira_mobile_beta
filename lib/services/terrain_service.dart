@@ -6,7 +6,8 @@ class TerrainService {
   Map<String, dynamic> _normalizeTerrain(Map<String, dynamic> row) {
     final map = Map<String, dynamic>.from(row);
     final photoUrl =
-        map['main_photo_url'] ?? _extractFirstPhotoUrl(map['additional_photos']);
+        map['main_photo_url'] ??
+        _extractFirstPhotoUrl(map['additional_photos']);
 
     final priceValue = map['price'] ?? map['price_fcfa'];
     final surfaceValue = map['surface'] ?? map['surface_m2'];
@@ -131,6 +132,8 @@ class TerrainService {
           .from('terrains_foncira')
           .select('*')
           .eq('id', terrainId)
+          .eq('status', 'publie')
+          .isFilter('deleted_at', null)
           .single();
 
       return _normalizeTerrain(Map<String, dynamic>.from(response));

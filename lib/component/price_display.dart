@@ -10,14 +10,12 @@ class PriceDisplay extends StatelessWidget {
   final double fcfaAmount; // Montant en FCFA (source de vérité)
   final TextStyle? dollarStyle;
   final TextStyle? fcfaStyle;
-  final MainAxisAlignment alignment;
 
   const PriceDisplay({
     super.key,
     required this.fcfaAmount,
     this.dollarStyle,
     this.fcfaStyle,
-    this.alignment = MainAxisAlignment.start,
   });
 
   String formatNumber(double value) {
@@ -38,9 +36,9 @@ class PriceDisplay extends StatelessWidget {
     // Calcul: FCFA → USD (rond à l'entier le plus proche)
     final dollarAmount = (fcfaAmount / kFcfaToUsdRate).roundToDouble();
 
-    return Column(
-      mainAxisAlignment: alignment,
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
       children: [
         // Dollar en grand (PRIMARY)
         Text(
@@ -54,7 +52,7 @@ class PriceDisplay extends StatelessWidget {
                 letterSpacing: -0.5,
               ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(width: 12),
         // FCFA en petit (SECONDARY)
         Text(
           '≈ ${formatNumber(fcfaAmount)} FCFA',

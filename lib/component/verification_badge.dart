@@ -26,7 +26,14 @@ class VerificationBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: _bgColor,
         borderRadius: BorderRadius.circular(compact ? 8 : 10),
-        border: Border.all(color: _borderColor, width: 1),
+        border: Border.all(color: _borderColor, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: compact ? 2 : 4,
+            offset: const Offset(0, 1),
+          ),
+        ],
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -36,9 +43,16 @@ class VerificationBadge extends StatelessWidget {
           Text(
             compact ? status.shortLabel : status.label,
             style: TextStyle(
-              color: _iconColor,
+              color: Colors.white,
               fontSize: compact ? 10 : 12,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
+              shadows: [
+                Shadow(
+                  offset: const Offset(0, 1),
+                  blurRadius: 3,
+                  color: Colors.black.withOpacity(0.5),
+                ),
+              ],
             ),
           ),
         ],
@@ -49,34 +63,34 @@ class VerificationBadge extends StatelessWidget {
   Color get _bgColor {
     switch (status) {
       case VerificationFoncira.nonVerifie:
-        return kVerifNone.withOpacity(0.1);
+        return kVerifNone.withOpacity(0.32);
       case VerificationFoncira.verificationDemandee:
-        return kVerifRequested.withOpacity(0.1);
+        return kVerifRequested.withOpacity(0.32);
       case VerificationFoncira.enCoursDeVerification:
-        return kVerifInProgress.withOpacity(0.1);
+        return kVerifInProgress.withOpacity(0.32);
       case VerificationFoncira.verifieFaibleRisque:
-        return kVerifDoneLow.withOpacity(0.1);
+        return kVerifDoneLow.withOpacity(0.32);
       case VerificationFoncira.verifieMoyenRisque:
-        return kVerifDoneMedium.withOpacity(0.1);
+        return kVerifDoneMedium.withOpacity(0.32);
       case VerificationFoncira.verifieRisqueEleve:
-        return kVerifDoneHigh.withOpacity(0.1);
+        return kVerifDoneHigh.withOpacity(0.32);
     }
   }
 
   Color get _borderColor {
     switch (status) {
       case VerificationFoncira.nonVerifie:
-        return kVerifNone.withOpacity(0.3);
+        return kVerifNone.withOpacity(0.7);
       case VerificationFoncira.verificationDemandee:
-        return kVerifRequested.withOpacity(0.3);
+        return kVerifRequested.withOpacity(0.7);
       case VerificationFoncira.enCoursDeVerification:
-        return kVerifInProgress.withOpacity(0.3);
+        return kVerifInProgress.withOpacity(0.7);
       case VerificationFoncira.verifieFaibleRisque:
-        return kVerifDoneLow.withOpacity(0.3);
+        return kVerifDoneLow.withOpacity(0.7);
       case VerificationFoncira.verifieMoyenRisque:
-        return kVerifDoneMedium.withOpacity(0.3);
+        return kVerifDoneMedium.withOpacity(0.7);
       case VerificationFoncira.verifieRisqueEleve:
-        return kVerifDoneHigh.withOpacity(0.3);
+        return kVerifDoneHigh.withOpacity(0.7);
     }
   }
 

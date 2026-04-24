@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../theme/colors.dart';
 import '../component/foncira_button.dart';
+import '../component/price_row.dart';
 import '../models/verification_state.dart';
 import '../providers/verification_provider.dart';
 import '../services/supabase_service.dart';
+import './suivre_verification_page.dart';
 
 const String kGuaranteeText =
     'On garantit un rapport complet, honnête et livré en 10 jours. Si on ne livre pas, vous êtes remboursé.';
@@ -39,6 +42,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
   late TextEditingController lienPartageController;
   late TextEditingController prenomController;
   late TextEditingController whatsappController;
+  late TextEditingController sellerWhatsappController;
 
   // Document uploads for Screen 1
   List<DocumentUpload> uploadedDocuments = [];
@@ -47,6 +51,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
   bool isLoadingPreAnalysis = false;
   bool isLoadingConfirmation = false;
   bool isLoadingPayment = false;
+  bool isCreatingTrackingRequest = false;
   List<String> notifications = [];
 
   @override
@@ -68,6 +73,9 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
     lienPartageController = TextEditingController(text: state.lienPartage);
     prenomController = TextEditingController(text: state.prenom);
     whatsappController = TextEditingController(text: state.whatsapp);
+    sellerWhatsappController = TextEditingController(
+      text: state.sellerWhatsapp,
+    );
   }
 
   @override
@@ -77,6 +85,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
     lienPartageController.dispose();
     prenomController.dispose();
     whatsappController.dispose();
+    sellerWhatsappController.dispose();
     super.dispose();
   }
 
@@ -85,6 +94,15 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
   }
 
   void _submitScreen1() {
+    if (!state.consentGiven) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Vous devez accepter l\'audit pour continuer'),
+        ),
+      );
+      return;
+    }
+
     if (localisationController.text.isEmpty) {
       ScaffoldMessenger.of(
         context,
@@ -112,9 +130,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
         int.tryParse(priceController.text.replaceAll(' ', '')) ?? 0;
     if (prixFCFA == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Le prix doit être supérieur à 0'),
-        ),
+        const SnackBar(content: Text('Le prix doit être supérieur à 0')),
       );
       return;
     }
@@ -126,7 +142,6 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
         prixUSD: VerificationState.convertToUSD(prixFCFA),
         niveauRisque: VerificationState.calculateRisk(state.typeDocuments),
         lienPartage: lienPartageController.text,
-        documents: uploadedDocuments,
       );
       isLoadingPreAnalysis = true;
     });
@@ -141,9 +156,13 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
   }
 
   void _submitScreen3() {
-    if (prenomController.text.isEmpty || whatsappController.text.isEmpty) {
+    if (prenomController.text.isEmpty ||
+        whatsappController.text.isEmpty ||
+        sellerWhatsappController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Remplissez tous les champs')),
+        const SnackBar(
+          content: Text('Remplissez tous les champs (incluant le vendeur)'),
+        ),
       );
       return;
     }
@@ -152,6 +171,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
       state = state.copyWith(
         prenom: prenomController.text,
         whatsapp: whatsappController.text,
+        sellerWhatsapp: sellerWhatsappController.text,
         dateLivraison: DateTime.now().add(const Duration(days: 10)),
       );
       isLoadingConfirmation = true;
@@ -167,9 +187,9 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
 
   void _submitPayment(String method) async {
     if (!SupabaseService().isAuthenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Vous devez être connecté')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Vous devez être connecté')));
       return;
     }
 
@@ -226,11 +246,78 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
     }
   }
 
+  Future<void> _openTrackingFromConfirmation() async {
+    if (!SupabaseService().isAuthenticated) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Vous devez être connecté')));
+      return;
+    }
+
+    if (isCreatingTrackingRequest) return;
+
+    setState(() => isCreatingTrackingRequest = true);
+
+    try {
+      final provider = context.read<VerificationProvider>();
+
+      bool success;
+      if (widget.isExternalTerrain) {
+        success = await provider.createFromExternal(
+          title: state.localisation,
+          location: state.localisation,
+          price: state.prixFCFA.toDouble(),
+          documentType: state.typeDocuments.isNotEmpty
+              ? state.typeDocuments.map((e) => e.label).join(', ')
+              : 'N/A',
+          sharingLink: state.lienPartage,
+        );
+      } else {
+        success = await provider.createFromMarketplace(
+          terrainId: '',
+          terrainTitle: state.terrainTitre ?? state.localisation,
+          terrainLocation: state.localisation,
+          terrainPrice: state.prixFCFA.toDouble(),
+          documentType: state.typeDocuments.isNotEmpty
+              ? state.typeDocuments.map((e) => e.label).join(', ')
+              : 'N/A',
+          sharingLink: state.lienPartage,
+        );
+      }
+
+      if (!mounted) return;
+
+      if (success) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const SuivreVerificationPage(),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: ${provider.errorMessage}')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Erreur: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => isCreatingTrackingRequest = false);
+      }
+    }
+  }
+
   void _startDashboardSimulation() {
     final notifs = [
-      'J1 : "On a commencé la vérification cadastrale de votre terrain."',
-      'J3 : "Notre agent est allé sur le terrain ce matin. Voici 3 photos."',
-      'J7 : "La vérification coutumière est terminée. Tout se passe bien."',
+      'J1 : "Votre demande a été validée. Notre équipe prend en charge votre dossier."',
+      'J3 : "La vérification administrative est en cours. Nous consultons le cadastre et les registres officiels."',
+      'J5 : "Notre agent a rencontré les autorités coutumières. Résultats en cours d\'analyse."',
+      'J7 : "Vérification du voisinage et du géomètre effectuée. Toutes les bornes sont conformes."',
+      'J10 : "Le juriste a rendu sa décision. Votre rapport final est en cours de rédaction."',
     ];
 
     for (int i = 0; i < notifs.length; i++) {
@@ -244,7 +331,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
     }
 
     // Auto-advance to report after all notifications
-    Future.delayed(const Duration(seconds: 15), () {
+    Future.delayed(const Duration(seconds: 21), () {
       if (mounted) {
         _goToStep(7);
       }
@@ -259,18 +346,20 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
         case 2:
           return 'Préanalyse';
         case 3:
-          return 'C\'est toi ?';
+          return 'Confirmer votre identité';
         case 4:
-          return 'Confirmation';
+          return 'Vos documents';
         case 5:
-          return 'Sécuriser le dossier';
+          return 'Confirmation';
         case 6:
-          return 'Vérification en cours';
+          return 'Sécuriser le dossier';
         case 7:
-          return 'Votre rapport';
+          return 'Vérification en cours';
         case 8:
-          return 'Quelle suite ?';
+          return 'Votre rapport';
         case 9:
+          return 'Quelle suite ?';
+        case 10:
           return 'Parrainage';
         default:
           return '';
@@ -278,7 +367,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
     } else {
       switch (currentStep) {
         case 3:
-          return 'C\'est toi ?';
+          return 'Confirmer votre identité';
         case 4:
           return 'Confirmation';
         case 5:
@@ -347,6 +436,7 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
             priceController: priceController,
             lienPartageController: lienPartageController,
             selectedDocumentTypes: state.typeDocuments,
+            consentGiven: state.consentGiven,
             onDocumentTypeChanged: (type) {
               setState(() {
                 final list = List<TypeDocument>.from(state.typeDocuments);
@@ -358,41 +448,61 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
                 state = state.copyWith(typeDocuments: list);
               });
             },
+            onConsentChanged: (value) {
+              setState(() {
+                state = state.copyWith(consentGiven: value);
+              });
+            },
             onSubmit: _submitScreen1,
             isLoading: isLoadingPreAnalysis,
-            uploadedDocuments: uploadedDocuments,
-            onDocumentAdded: (doc) =>
-                setState(() => uploadedDocuments.add(doc)),
-            onDocumentRemoved: (doc) =>
-                setState(() => uploadedDocuments.remove(doc)),
           );
         case 2:
           return _Screen2PreAnalysis(
             state: state,
+            onServiceTypeSelected: (serviceType) {
+              setState(() {
+                state = state.copyWith(serviceType: serviceType);
+              });
+            },
             onContinue: () => _goToStep(3),
           );
         case 3:
           return _Screen3Client(
             prenomController: prenomController,
             whatsappController: whatsappController,
+            sellerWhatsappController: sellerWhatsappController,
             onSubmit: _submitScreen3,
             isLoading: isLoadingConfirmation,
           );
         case 4:
-          return _Screen4Confirmation(state: state);
+          return _Screen4Documents(
+            state: state,
+            uploadedDocuments: uploadedDocuments,
+            onDocumentAdded: (doc) =>
+                setState(() => uploadedDocuments.add(doc)),
+            onDocumentRemoved: (doc) =>
+                setState(() => uploadedDocuments.remove(doc)),
+            onContinue: () => _goToStep(5),
+          );
         case 5:
+          return _Screen4Confirmation(
+            state: state,
+            onTrackVerification: _openTrackingFromConfirmation,
+            isLoading: isCreatingTrackingRequest,
+          );
+        case 6:
           return _Screen5Payment(
             state: state,
             onSubmit: _submitPayment,
             isLoading: isLoadingPayment,
           );
-        case 6:
-          return _Screen6Dashboard(state: state, notifications: notifications);
         case 7:
-          return _Screen7Report(state: state, onContinue: () => _goToStep(8));
+          return _Screen6Dashboard(state: state, notifications: notifications);
         case 8:
-          return _Screen8Decision(onDecision: (choice) => _goToStep(9));
+          return _Screen7Report(state: state, onContinue: () => _goToStep(9));
         case 9:
+          return _Screen8Decision(onDecision: (choice) => _goToStep(10));
+        case 10:
           return _Screen9Referral(prenom: state.prenom);
         default:
           return const SizedBox.shrink();
@@ -404,25 +514,40 @@ class _VerificationTunnelPageState extends State<VerificationTunnelPage> {
           return _Screen3Client(
             prenomController: prenomController,
             whatsappController: whatsappController,
+            sellerWhatsappController: sellerWhatsappController,
             terrainInfo: state,
             onSubmit: _submitScreen3,
             isLoading: isLoadingConfirmation,
           );
         case 4:
-          return _Screen4Confirmation(state: state);
+          return _Screen4Documents(
+            state: state,
+            uploadedDocuments: uploadedDocuments,
+            onDocumentAdded: (doc) =>
+                setState(() => uploadedDocuments.add(doc)),
+            onDocumentRemoved: (doc) =>
+                setState(() => uploadedDocuments.remove(doc)),
+            onContinue: () => _goToStep(5),
+          );
         case 5:
+          return _Screen4Confirmation(
+            state: state,
+            onTrackVerification: _openTrackingFromConfirmation,
+            isLoading: isCreatingTrackingRequest,
+          );
+        case 6:
           return _Screen5Payment(
             state: state,
             onSubmit: _submitPayment,
             isLoading: isLoadingPayment,
           );
-        case 6:
-          return _Screen6Dashboard(state: state, notifications: notifications);
         case 7:
-          return _Screen7Report(state: state, onContinue: () => _goToStep(8));
+          return _Screen6Dashboard(state: state, notifications: notifications);
         case 8:
-          return _Screen8Decision(onDecision: (choice) => _goToStep(9));
+          return _Screen7Report(state: state, onContinue: () => _goToStep(9));
         case 9:
+          return _Screen8Decision(onDecision: (choice) => _goToStep(10));
+        case 10:
           return _Screen9Referral(prenom: state.prenom);
         default:
           return const SizedBox.shrink();
@@ -440,24 +565,22 @@ class _Screen1Terrain extends StatefulWidget {
   final TextEditingController priceController;
   final TextEditingController lienPartageController;
   final List<TypeDocument> selectedDocumentTypes;
+  final bool consentGiven;
   final Function(TypeDocument) onDocumentTypeChanged;
+  final Function(bool) onConsentChanged;
   final VoidCallback onSubmit;
   final bool isLoading;
-  final List<DocumentUpload> uploadedDocuments;
-  final Function(DocumentUpload) onDocumentAdded;
-  final Function(DocumentUpload) onDocumentRemoved;
 
   const _Screen1Terrain({
     required this.localisationController,
     required this.priceController,
     required this.lienPartageController,
     required this.selectedDocumentTypes,
+    required this.consentGiven,
     required this.onDocumentTypeChanged,
+    required this.onConsentChanged,
     required this.onSubmit,
     required this.isLoading,
-    required this.uploadedDocuments,
-    required this.onDocumentAdded,
-    required this.onDocumentRemoved,
   });
 
   @override
@@ -472,111 +595,6 @@ class __Screen1TerrainState extends State<_Screen1Terrain> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── FONCIRA Terrain Identification Card (if from marketplace) ───
-          if (widget.uploadedDocuments.isNotEmpty ||
-              // This is a placeholder - in a real scenario, check initialState from parent
-              false) ...[
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: kPrimaryLight.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: kPrimaryLight.withOpacity(0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Terrain identifié',
-                    style: GoogleFonts.inter(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: kPrimaryLight,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Placeholder for terrain image
-                  Container(
-                    width: double.infinity,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      color: kDarkCard,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: kBorderDark),
-                    ),
-                    child: Center(
-                      child: Icon(
-                        Icons.image_outlined,
-                        color: kTextMuted,
-                        size: 40,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Terrain details
-                  Text(
-                    'Titre du bien',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: kTextPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Localisation',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: kTextMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Lomé',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: kTextPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Surface',
-                            style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: kTextMuted,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            '500 m²',
-                            style: GoogleFonts.inter(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: kTextPrimary,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-          ],
-
           Text(
             'Parle-nous du terrain',
             style: GoogleFonts.outfit(
@@ -842,167 +860,39 @@ class __Screen1TerrainState extends State<_Screen1Terrain> {
           ),
           const SizedBox(height: 24),
 
-          // ─── OPTIONAL FIELD 2: Documents disponibles ───
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'Documents disponibles',
-                    style: GoogleFonts.inter(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: kTextPrimary,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: kTextMuted.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      'Optionnel',
-                      style: GoogleFonts.inter(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: kTextMuted,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Ajoute les documents que tu as — titre, convention, reçu, photo du terrain. Tout aide.',
+          // ─── MANDATORY CONSENT CHECKBOX ───
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: kDarkCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kBorderDark),
+            ),
+            child: CheckboxListTile(
+              value: widget.consentGiven,
+              onChanged: (value) {
+                widget.onConsentChanged(value ?? false);
+              },
+              activeColor: kPrimary,
+              checkColor: Colors.white,
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                'Je certifie avoir l\'accord du vendeur pour effectuer cet audit foncier.',
                 style: GoogleFonts.inter(
-                  fontSize: 12,
-                  color: kTextSecondary,
-                  fontStyle: FontStyle.italic,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: kTextPrimary,
                 ),
               ),
-              const SizedBox(height: 12),
-
-              // Upload button
-              GestureDetector(
-                onTap: () {
-                  // Simulate document upload
-                  // In a real app, use file_picker or image_picker
-                  final dummyDoc = DocumentUpload(
-                    fileName:
-                        'document_${DateTime.now().millisecondsSinceEpoch}.pdf',
-                    filePath: 'assets/document.pdf',
-                    fileType: 'PDF',
-                    uploadedAt: DateTime.now(),
-                  );
-                  widget.onDocumentAdded(dummyDoc);
-                },
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 14,
-                    horizontal: 16,
-                  ),
-                  decoration: BoxDecoration(
-                    color: kDarkCard,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: kBorderDark, width: 1.5),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.cloud_upload_outlined,
-                        color: kPrimary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Importer un document (PDF, JPG, PNG)',
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: kPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              // Display uploaded documents
-              if (widget.uploadedDocuments.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                ...widget.uploadedDocuments.map((doc) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                      decoration: BoxDecoration(
-                        color: kSuccess.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: kSuccess.withOpacity(0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.description_outlined,
-                            color: kSuccess,
-                            size: 18,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  doc.fileName,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: kTextPrimary,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                Text(
-                                  doc.fileType,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 10,
-                                    color: kTextMuted,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () => widget.onDocumentRemoved(doc),
-                            child: Icon(
-                              Icons.close_rounded,
-                              color: kDanger.withOpacity(0.7),
-                              size: 18,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ],
-            ],
+            ),
           ),
 
           const SizedBox(height: 36),
           FonciraButton(
             label: 'Continuer →',
-            onPressed: widget.isLoading ? null : widget.onSubmit,
+            onPressed: widget.isLoading || !widget.consentGiven
+                ? null
+                : widget.onSubmit,
             isLoading: widget.isLoading,
           ),
         ],
@@ -1016,118 +906,29 @@ class __Screen1TerrainState extends State<_Screen1Terrain> {
 //  Structured analysis: what's confirmed + what needs verification
 // ══════════════════════════════════════════════════════════════
 
-class _Screen2PreAnalysis extends StatelessWidget {
+class _Screen2PreAnalysis extends StatefulWidget {
   final VerificationState state;
+  final Function(String) onServiceTypeSelected;
   final VoidCallback onContinue;
 
-  const _Screen2PreAnalysis({required this.state, required this.onContinue});
-
-  List<String> _getPositivePoints() {
-    final points = <String>[];
-
-    // Based on document type
-    if ((state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) ==
-        TypeDocument.titreFoncier) {
-      points.add(
-        'Un titre foncier est présent — c\'est le document le plus solide qui existe au Togo.',
-      );
-    } else if ((state.typeDocuments.isNotEmpty
-            ? state.typeDocuments.first
-            : null) ==
-        TypeDocument.convention) {
-      points.add(
-        'La convention signée prouve une intention d\'achat formalisée.',
-      );
-    } else if ((state.typeDocuments.isNotEmpty
-            ? state.typeDocuments.first
-            : null) ==
-        TypeDocument.recuVente) {
-      points.add(
-        'Un reçu de vente documenta une transaction antérieure.',
-      );
-    }
-
-    // Based on documents uploaded
-    if (state.documents.isNotEmpty) {
-      points.add(
-        'Documents supplémentaires fournis — ${state.documents.length} fichier${state.documents.length > 1 ? 's' : ''} permettront une préanalyse plus précise.',
-      );
-    }
-
-    // Based on sharing link
-    if (state.lienPartage.isNotEmpty) {
-      points.add(
-        'Source identifiée — le lien de partage facilite la traçabilité du bien.',
-      );
-    }
-
-    // Default positive point
-    if (points.isEmpty) {
-      points.add('Les informations basiques du terrain sont documentées.');
-    }
-
-    return points;
-  }
-
-  List<String> _getPointsToVerify() {
-    final points = <String>[];
-
-    // Based on document type
-    if ((state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) ==
-            TypeDocument.aucunDocument ||
-        (state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) ==
-            TypeDocument.neSaisPas) {
-      points.add(
-        'L\'absence de document officiel expose à un risque important.',
-      );
-      points.add(
-        'Une vérification terrains et coutumière est essentielle.',
-      );
-    } else if ((state.typeDocuments.isNotEmpty
-            ? state.typeDocuments.first
-            : null) ==
-        TypeDocument.convention) {
-      points.add(
-        'Une convention sans enregistrement notarial n\'a pas de valeur juridique pleine.',
-      );
-      points.add('L\'absence de titre foncier doit être clarifiée.');
-    } else if ((state.typeDocuments.isNotEmpty
-                ? state.typeDocuments.first
-                : null) ==
-            TypeDocument.logement ||
-        (state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) ==
-            TypeDocument.recuVente) {
-      points.add(
-        'Le statut d\'enregistrement auprès des autorités cadastrales doit être confirmé.',
-      );
-    }
-
-    // Additional verification points
-    if ((state.typeDocuments.isNotEmpty ? state.typeDocuments.first : null) !=
-        TypeDocument.titreFoncier) {
-      points.add(
-        'L\'absence de bornage officiel expose à des litiges de délimitation.',
-      );
-    }
-
-    // Based on geolocation
-    points.add(
-      'Vérification coutumière sur le terrain : statut auprès des autorités locales.',
-    );
-
-    return points;
-  }
+  const _Screen2PreAnalysis({
+    required this.state,
+    required this.onServiceTypeSelected,
+    required this.onContinue,
+  });
 
   @override
+  State<_Screen2PreAnalysis> createState() => __Screen2PreAnalysisState();
+}
+
+class __Screen2PreAnalysisState extends State<_Screen2PreAnalysis> {
+  @override
   Widget build(BuildContext context) {
-    final riskEmoji = state.niveauRisque == NiveauRisque.faible
+    final riskEmoji = widget.state.niveauRisque == NiveauRisque.faible
         ? '🟢'
-        : state.niveauRisque == NiveauRisque.modere
+        : widget.state.niveauRisque == NiveauRisque.modere
         ? '🟡'
         : '🔴';
-
-    final positivePoints = _getPositivePoints();
-    final pointsToVerify = _getPointsToVerify();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -1145,11 +946,11 @@ class _Screen2PreAnalysis extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  state.niveauRisque.label,
+                  widget.state.niveauRisque.label,
                   style: GoogleFonts.outfit(
                     fontSize: 26,
                     fontWeight: FontWeight.w700,
-                    color: state.niveauRisque.color,
+                    color: widget.state.niveauRisque.color,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -1158,13 +959,13 @@ class _Screen2PreAnalysis extends StatelessWidget {
           ),
           const SizedBox(height: 32),
 
-          // ─── BLOCK 1: What documents confirm ───
+          // ─── SECTION: Our Verification Method ───
           Text(
-            'Ce que les documents confirment',
+            'Notre méthode de vérification',
             style: GoogleFonts.inter(
               fontSize: 15,
               fontWeight: FontWeight.w700,
-              color: kSuccess,
+              color: kPrimary,
               letterSpacing: 0.5,
             ),
           ),
@@ -1172,198 +973,180 @@ class _Screen2PreAnalysis extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: kSuccess.withOpacity(0.08),
+              color: kPrimary.withOpacity(0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kSuccess.withOpacity(0.3)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: positivePoints.map((point) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Icon(
-                          Icons.check_circle_rounded,
-                          color: kSuccess,
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          point,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: kTextSecondary,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ─── BLOCK 2: What needs verification ───
-          Text(
-            'Ce qui reste à vérifier',
-            style: GoogleFonts.inter(
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
-              color: kWarning,
-              letterSpacing: 0.5,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: kWarning.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kWarning.withOpacity(0.3)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: pointsToVerify.map((point) {
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Icon(
-                          Icons.info_outline_rounded,
-                          color: kWarning,
-                          size: 18,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          point,
-                          style: GoogleFonts.inter(
-                            fontSize: 13,
-                            color: kTextSecondary,
-                            height: 1.5,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 24),
-
-          // ─── Risk-based testimonials (if high risk) ───
-          if (state.niveauRisque == NiveauRisque.eleve) ...[
-            Text(
-              'Pourquoi cette prudence ?',
-              style: GoogleFonts.inter(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: kTextPrimary,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: kDarkCard,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kBorderDark),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Ama a évité 25M FCFA',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: kTextPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '"Sans une vérification approfondie, j\'aurais signé sur un terrain en litige."',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: kTextSecondary,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: kDarkCard,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: kBorderDark),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Kofi a évité 13M FCFA',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: kTextPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '"J\'aurais accépté une fausse quittance. Merci pour la vérification."',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      color: kTextSecondary,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // Pricing info
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: kSuccess.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kSuccess.withOpacity(0.3)),
+              border: Border.all(color: kPrimary.withOpacity(0.3)),
             ),
             child: Text(
-              'Cette vérification complète coûte \$$kVerificationPriceUSD (≈${kVerificationPriceFCFA ~/ 1000}k FCFA) et elle est basée sur les documents que tu as fournis.',
+              'Notre vérification est indépendante. Même avec un titre foncier, nous consultons chaque source séparément pour croiser et confirmer.',
               style: GoogleFonts.inter(
                 fontSize: 13,
-                color: kSuccess,
-                fontWeight: FontWeight.w600,
-                height: 1.5,
+                color: kTextSecondary,
+                height: 1.6,
               ),
-              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // ─── SERVICE SELECTION CARDS ───
+          Text(
+            'Choisissez votre service',
+            style: GoogleFonts.inter(
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+              color: kTextPrimary,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Service 1: Vérification complète (preselected)
+          GestureDetector(
+            onTap: () {
+              widget.onServiceTypeSelected('complete');
+            },
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: widget.state.serviceType == 'complete'
+                    ? kPrimary.withOpacity(0.1)
+                    : kDarkCard,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: widget.state.serviceType == 'complete'
+                      ? kPrimary
+                      : kBorderDark,
+                  width: widget.state.serviceType == 'complete' ? 2 : 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Vérification complète',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: kTextPrimary,
+                        ),
+                      ),
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: kPrimary, width: 2),
+                          color: widget.state.serviceType == 'complete'
+                              ? kPrimary
+                              : Colors.transparent,
+                        ),
+                        child: widget.state.serviceType == 'complete'
+                            ? const Center(
+                                child: Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
+                              )
+                            : null,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Vérification indépendante de toutes les sources',
+                    style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
+                  ),
+                  const SizedBox(height: 12),
+                  PriceRow(
+                    priceUsd: 380,
+                    priceFcfa: 250000,
+                    usdFontSize: 24,
+                    fcfaFontSize: 12,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Service 2: Pack Vérification + Accompagnement
+          GestureDetector(
+            onTap: () {
+              widget.onServiceTypeSelected('accompaniment');
+            },
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: widget.state.serviceType == 'accompaniment'
+                    ? kPrimary.withOpacity(0.1)
+                    : kDarkCard,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: widget.state.serviceType == 'accompaniment'
+                      ? kPrimary
+                      : kBorderDark,
+                  width: widget.state.serviceType == 'accompaniment' ? 2 : 1,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Pack Vérification + Accompagnement',
+                        style: GoogleFonts.inter(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: kTextPrimary,
+                        ),
+                      ),
+                      Container(
+                        width: 20,
+                        height: 20,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(color: kPrimary, width: 2),
+                          color: widget.state.serviceType == 'accompaniment'
+                              ? kPrimary
+                              : Colors.transparent,
+                        ),
+                        child: widget.state.serviceType == 'accompaniment'
+                            ? const Center(
+                                child: Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 12,
+                                ),
+                              )
+                            : null,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Vérification + assistance notaire pour la finalisation',
+                    style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
+                  ),
+                  const SizedBox(height: 12),
+                  PriceRow(
+                    priceUsd: 549,
+                    priceFcfa: 325000,
+                    usdFontSize: 24,
+                    fcfaFontSize: 12,
+                  ),
+                ],
+              ),
             ),
           ),
 
           const SizedBox(height: 32),
-          FonciraButton(
-            label: 'Lancer la vérification complète →',
-            onPressed: onContinue,
-          ),
+          FonciraButton(label: 'Continuer →', onPressed: widget.onContinue),
         ],
       ),
     );
@@ -1377,6 +1160,7 @@ class _Screen2PreAnalysis extends StatelessWidget {
 class _Screen3Client extends StatelessWidget {
   final TextEditingController prenomController;
   final TextEditingController whatsappController;
+  final TextEditingController sellerWhatsappController;
   final VerificationState? terrainInfo; // For marketplace display
   final VoidCallback onSubmit;
   final bool isLoading;
@@ -1384,6 +1168,7 @@ class _Screen3Client extends StatelessWidget {
   const _Screen3Client({
     required this.prenomController,
     required this.whatsappController,
+    required this.sellerWhatsappController,
     required this.onSubmit,
     required this.isLoading,
     this.terrainInfo,
@@ -1437,7 +1222,7 @@ class _Screen3Client extends StatelessWidget {
           ],
 
           Text(
-            'C\'est toi ?',
+            'Confirmer votre identité',
             style: GoogleFonts.outfit(
               fontSize: 28,
               fontWeight: FontWeight.w700,
@@ -1512,9 +1297,53 @@ class _Screen3Client extends StatelessWidget {
               },
             ),
           ),
+          const SizedBox(height: 24),
+
+          // CHAMP 3: Numéro du vendeur (NOUVEAU)
+          Text(
+            'Numéro du vendeur',
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: kTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            decoration: BoxDecoration(
+              color: kDarkCard,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: kBorderDark),
+            ),
+            child: IntlPhoneField(
+              controller: sellerWhatsappController,
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                hintText: '+XXX XX XX XX XX',
+                hintStyle: GoogleFonts.inter(color: kTextMuted, fontSize: 14),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
+              ),
+              initialCountryCode: 'TG',
+              onChanged: (phone) {
+                // Country code for seller (may differ)
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Nous contacterons le vendeur pour localiser le terrain et vérifier les informations.',
+            style: GoogleFonts.inter(
+              fontSize: 12,
+              color: kTextMuted,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
           const SizedBox(height: 32),
           FonciraButton(
-            label: 'Recevoir ma confirmation →',
+            label: 'Continuer →',
             onPressed: isLoading ? null : onSubmit,
             isLoading: isLoading,
           ),
@@ -1525,13 +1354,247 @@ class _Screen3Client extends StatelessWidget {
 }
 
 // ══════════════════════════════════════════════════════════════
-//  SCREEN 4 — Confirmation + Guarantee
+//  SCREEN 4 — Document Upload (NEW STEP)
+//  Conditional upload based on Step 1 document selection
+// ══════════════════════════════════════════════════════════════
+
+class _Screen4Documents extends StatefulWidget {
+  final VerificationState state;
+  final List<DocumentUpload> uploadedDocuments;
+  final Function(DocumentUpload) onDocumentAdded;
+  final Function(DocumentUpload) onDocumentRemoved;
+  final VoidCallback onContinue;
+
+  const _Screen4Documents({
+    required this.state,
+    required this.uploadedDocuments,
+    required this.onDocumentAdded,
+    required this.onDocumentRemoved,
+    required this.onContinue,
+  });
+
+  @override
+  State<_Screen4Documents> createState() => __Screen4DocumentsState();
+}
+
+class __Screen4DocumentsState extends State<_Screen4Documents> {
+  bool _hasNoDocuments() {
+    return widget.state.typeDocuments.contains(TypeDocument.aucunDocument) ||
+        widget.state.typeDocuments.contains(TypeDocument.neSaisPas);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final noDocuments = _hasNoDocuments();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Vos documents',
+            style: GoogleFonts.outfit(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: kTextPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Soumettez les documents que vous avez. Chaque document accélère et renforce notre analyse.',
+            style: GoogleFonts.inter(
+              fontSize: 14,
+              color: kTextSecondary,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // IF NO DOCUMENTS SELECTED AT STEP 1
+          if (noDocuments) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: kWarning.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: kWarning.withOpacity(0.3)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.info_outline_rounded, color: kWarning, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Vous n\'avez pas de document pour ce terrain. Nous allons étudier votre dossier et vous contacterons sous 24h pour vous dire si nous pouvons accepter la vérification.',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        color: kTextSecondary,
+                        height: 1.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            // IF DOCUMENTS SELECTED - Show upload interface
+            Text(
+              'Documents à télécharger',
+              style: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: kTextPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Upload button
+            GestureDetector(
+              onTap: () {
+                // In production: use file_picker or image_picker
+                final dummyDoc = DocumentUpload(
+                  fileName:
+                      'document_${DateTime.now().millisecondsSinceEpoch}.pdf',
+                  filePath: 'assets/document.pdf',
+                  fileType: 'PDF',
+                  uploadedAt: DateTime.now(),
+                );
+                widget.onDocumentAdded(dummyDoc);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  vertical: 16,
+                  horizontal: 16,
+                ),
+                decoration: BoxDecoration(
+                  color: kDarkCard,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: kBorderDark, width: 1.5),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.cloud_upload_outlined,
+                      color: kPrimary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Importer un document (PDF, JPG, PNG)',
+                      style: GoogleFonts.inter(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: kPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Display uploaded documents
+            if (widget.uploadedDocuments.isNotEmpty) ...[
+              Text(
+                'Documents téléchargés',
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: kSuccess,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...widget.uploadedDocuments.map((doc) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: kSuccess.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: kSuccess.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.description_outlined,
+                          color: kSuccess,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                doc.fileName,
+                                style: GoogleFonts.inter(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: kTextPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                doc.fileType,
+                                style: GoogleFonts.inter(
+                                  fontSize: 10,
+                                  color: kTextMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        GestureDetector(
+                          onTap: () => widget.onDocumentRemoved(doc),
+                          child: Icon(
+                            Icons.close_rounded,
+                            color: kDanger.withOpacity(0.7),
+                            size: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+              const SizedBox(height: 20),
+            ],
+          ],
+
+          const SizedBox(height: 32),
+          FonciraButton(
+            label: 'Continuer →',
+            onPressed: widget.onContinue,
+            // Never blocking - always enabled
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SCREEN 5 — Confirmation + Guarantee
 // ══════════════════════════════════════════════════════════════
 
 class _Screen4Confirmation extends StatelessWidget {
   final VerificationState state;
+  final VoidCallback onTrackVerification;
+  final bool isLoading;
 
-  const _Screen4Confirmation({required this.state});
+  const _Screen4Confirmation({
+    required this.state,
+    required this.onTrackVerification,
+    this.isLoading = false,
+  });
 
   String _formatDate(DateTime date) {
     final months = [
@@ -1745,9 +1808,10 @@ class _Screen4Confirmation extends StatelessWidget {
           const SizedBox(height: 16),
           ...[
             ('J1', 'Demande validée'),
-            ('J3', 'Visite terrain'),
-            ('J7', 'Vérification coutumière'),
-            ('J10', 'Rapport final'),
+            ('J3', 'Vérification administrative'),
+            ('J5', 'Vérification coutumière'),
+            ('J7', 'Vérification du voisinage & Géomètre'),
+            ('J10', 'Décision du juriste & Rapport final'),
           ].map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -1784,6 +1848,30 @@ class _Screen4Confirmation extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 32),
+
+          // Navigation buttons (side by side)
+          Row(
+            children: [
+              Expanded(
+                child: FonciraButton(
+                  label: 'Retour à l\'accueil',
+                  variant: FonciraButtonVariant.outlined,
+                  onPressed: () {
+                    Navigator.popUntil(context, (route) => route.isFirst);
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FonciraButton(
+                  label: 'Suivre ma vérification →',
+                  isLoading: isLoading,
+                  onPressed: isLoading ? null : onTrackVerification,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
         ],
       ),
     );
@@ -1810,7 +1898,43 @@ class _Screen5Payment extends StatefulWidget {
 }
 
 class __Screen5PaymentState extends State<_Screen5Payment> {
-  String selectedMethod = '';
+  @override
+  void initState() {
+    super.initState();
+    // Mark verification as 'receptionnee' when payment screen appears
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _markAsReceptionnee();
+    });
+  }
+
+  Future<void> _markAsReceptionnee() async {
+    try {
+      // Find and update the verification record by terrain_id
+      final terrainId = widget.state.terrainId;
+      if (terrainId != null) {
+        // Find the verification to update
+        final verifications = await SupabaseService.instance.client
+            .from('verifications')
+            .select('id')
+            .eq('terrain_id', terrainId)
+            .order('created_at', ascending: false)
+            .limit(1);
+
+        if (verifications.isNotEmpty) {
+          final verificationId = verifications[0]['id'];
+          await SupabaseService.instance.client
+              .from('verifications')
+              .update({
+                'client_status': 'receptionnee',
+                'updated_at': DateTime.now().toIso8601String(),
+              })
+              .eq('id', verificationId);
+        }
+      }
+    } catch (e) {
+      print('Erreur lors de la mise à jour du statut: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1819,85 +1943,136 @@ class __Screen5PaymentState extends State<_Screen5Payment> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Summary
+          // Success icon
+          Center(
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                color: kSuccess.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(50),
+              ),
+              child: const Center(
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  size: 60,
+                  color: kSuccess,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          // Main message
+          Center(
+            child: Column(
+              children: [
+                Text(
+                  'Votre demande est bien enregistrée',
+                  style: GoogleFonts.outfit(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: kTextPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Un agent FONCIRA vous contactera sur WhatsApp sous 24h pour procéder au paiement et valider votre dossier.',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    color: kTextMuted,
+                    height: 1.6,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 40),
+
+          // Price summary
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: kDarkCard,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(color: kBorderDark),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Vérification complète du terrain',
+                  'Montant à régler',
                   style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
                 ),
                 const SizedBox(height: 12),
-                Text(
-                  '\$$kVerificationPriceUSD',
-                  style: GoogleFonts.outfit(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    color: kGold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '≈ ${kVerificationPriceFCFA ~/ 1000}k FCFA',
-                  style: GoogleFonts.inter(fontSize: 11, color: kTextMuted),
+                PriceRow(
+                  priceUsd: kVerificationPriceUSD.toDouble(),
+                  priceFcfa: kVerificationPriceFCFA.toDouble(),
+                  usdFontSize: 28,
+                  fcfaFontSize: 12,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 40),
 
-          // Payment methods
-          Text(
-            'Choisir une méthode de paiement',
-            style: GoogleFonts.outfit(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: kTextPrimary,
+          // WhatsApp CTA
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF25D366).withOpacity(0.08),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: const Color(0xFF25D366).withOpacity(0.3),
+              ),
+            ),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.phone_rounded,
+                  size: 40,
+                  color: Color(0xFF25D366),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Contacter FONCIRA',
+                  style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: kTextPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '+228 93 43 60 02',
+                  style: GoogleFonts.inter(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFF25D366),
+                    letterSpacing: 0.5,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          // Mobile Money
-          _PaymentOption(
-            icon: Icons.phone_iphone_rounded,
-            title: 'Mobile Money',
-            subtitle: 'MTN Mobile Money / Moov Money',
-            isSelected: selectedMethod == 'mobile',
-            onTap: () => setState(() => selectedMethod = 'mobile'),
+          // WhatsApp button
+          FonciraButton(
+            label: 'Contacter sur WhatsApp →',
+            onPressed: () => _openWhatsApp(context),
+            icon: Icons.phone_rounded,
           ),
           const SizedBox(height: 12),
 
-          // Card
-          _PaymentOption(
-            icon: Icons.credit_card_rounded,
-            title: 'Carte bancaire',
-            subtitle: 'Visa / Mastercard',
-            isSelected: selectedMethod == 'card',
-            onTap: () => setState(() => selectedMethod = 'card'),
-          ),
-          const SizedBox(height: 40),
-
-          // CTA
-          FonciraButton(
-            label: widget.isLoading
-                ? 'Traitement en cours...'
-                : 'Payer \$$kVerificationPriceUSD →',
-            onPressed: selectedMethod.isEmpty
-                ? null
-                : () => widget.onSubmit(selectedMethod),
-            isLoading: widget.isLoading,
-          ),
-          const SizedBox(height: 16),
+          // Info text
           Center(
             child: Text(
-              'Votre paiement est sécurisé. $kGuaranteeText',
+              '💡 Préparez votre dossier : documents, photos du terrain, identité valide.',
               style: GoogleFonts.inter(
                 fontSize: 12,
                 color: kTextMuted,
@@ -1910,80 +2085,26 @@ class __Screen5PaymentState extends State<_Screen5Payment> {
       ),
     );
   }
-}
 
-class _PaymentOption extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool isSelected;
-  final VoidCallback onTap;
+  void _openWhatsApp(BuildContext context) {
+    final terrainTitle = widget.state.terrainTitre ?? 'mon terrain';
+    final message = Uri.encodeComponent(
+      'Bonjour FONCIRA, j\'ai soumis une demande de vérification pour $terrainTitle. Je souhaite procéder au paiement.',
+    );
+    final whatsappUrl = 'https://wa.me/22893436002?text=$message';
 
-  const _PaymentOption({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isSelected ? kPrimary.withOpacity(0.1) : kDarkCard,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isSelected ? kPrimary : kBorderDark,
-            width: isSelected ? 2 : 1,
+    try {
+      launchUrl(Uri.parse(whatsappUrl), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      print('Erreur lors de l\'ouverture de WhatsApp: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Erreur: impossible d\'ouvrir WhatsApp. Appelez +228 93 43 60 02',
           ),
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: isSelected ? kPrimary.withOpacity(0.15) : kBorderDark,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Icon(
-                  icon,
-                  color: isSelected ? kPrimary : kTextSecondary,
-                  size: 24,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: GoogleFonts.inter(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: kTextPrimary,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: GoogleFonts.inter(fontSize: 12, color: kTextMuted),
-                  ),
-                ],
-              ),
-            ),
-            if (isSelected)
-              Icon(Icons.check_circle_rounded, color: kPrimary, size: 24),
-          ],
-        ),
-      ),
-    );
+      );
+    }
   }
 }
 
@@ -2075,16 +2196,18 @@ class _Screen6Dashboard extends StatelessWidget {
 
           // Timeline
           ...[
-            ('J1', 'Vérification cadastrale'),
-            ('J3', 'Visite terrain'),
-            ('J7', 'Vérification coutumière'),
-            ('J10', 'Rapport final'),
+            ('J1', 'Demande validée'),
+            ('J3', 'Vérification administrative'),
+            ('J5', 'Vérification coutumière'),
+            ('J7', 'Vérification du voisinage & Géomètre'),
+            ('J10', 'Décision du juriste & Rapport final'),
           ].map((item) {
             final index = [
-              'Vérification cadastrale',
-              'Visite terrain',
+              'Demande validée',
+              'Vérification administrative',
               'Vérification coutumière',
-              'Rapport final',
+              'Vérification du voisinage & Géomètre',
+              'Décision du juriste & Rapport final',
             ].indexOf(item.$2);
             final isDone = index < notifications.length;
             return Padding(
@@ -2193,9 +2316,7 @@ class _Screen7Report extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final emoji = state.niveauRisque == NiveauRisque.faible
-        ? '🟢'
-        : '🔴';
+    final emoji = state.niveauRisque == NiveauRisque.faible ? '🟢' : '🔴';
     final verdict = state.niveauRisque == NiveauRisque.faible
         ? 'Risque faible — Tu peux y aller'
         : 'Risque élevé — On t\'explique pourquoi';
@@ -2345,12 +2466,7 @@ class _Screen8Decision extends StatelessWidget {
               'Aide Administrative avec notaire',
               'support',
             ),
-            (
-              '⏰',
-              'Pas maintenant',
-              'Voir d\'autres terrains vérifiés',
-              'skip',
-            ),
+            ('⏰', 'Pas maintenant', 'Voir d\'autres terrains vérifiés', 'skip'),
           ].map(
             (item) => Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -2461,10 +2577,7 @@ class __Screen9ReferralState extends State<_Screen9Referral> {
                       ),
                       child: Column(
                         children: [
-                          Text(
-                            '😍',
-                            style: GoogleFonts.outfit(fontSize: 32),
-                          ),
+                          Text('😍', style: GoogleFonts.outfit(fontSize: 32)),
                           const SizedBox(height: 8),
                           Text(
                             'Ravi',
@@ -2498,10 +2611,7 @@ class __Screen9ReferralState extends State<_Screen9Referral> {
                       ),
                       child: Column(
                         children: [
-                          Text(
-                            '😐',
-                            style: GoogleFonts.outfit(fontSize: 32),
-                          ),
+                          Text('😐', style: GoogleFonts.outfit(fontSize: 32)),
                           const SizedBox(height: 8),
                           Text(
                             'Moyen',
@@ -2535,10 +2645,7 @@ class __Screen9ReferralState extends State<_Screen9Referral> {
                       ),
                       child: Column(
                         children: [
-                          Text(
-                            '😞',
-                            style: GoogleFonts.outfit(fontSize: 32),
-                          ),
+                          Text('😞', style: GoogleFonts.outfit(fontSize: 32)),
                           const SizedBox(height: 8),
                           Text(
                             'Non',
@@ -2672,6 +2779,51 @@ class __Screen9ReferralState extends State<_Screen9Referral> {
                     onPressed: () {
                       // Share logic
                     },
+                  ),
+                  const SizedBox(height: 40),
+                  // Navigation buttons
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FonciraButton(
+                        label: 'Suivre ma vérification →',
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  const SuivreVerificationPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(
+                          context,
+                        ).popUntil((route) => route.isFirst),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: kBorderDark),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              'Retour à l\'accueil',
+                              style: GoogleFonts.inter(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                                color: kTextPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

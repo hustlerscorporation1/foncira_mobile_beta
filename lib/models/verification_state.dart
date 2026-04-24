@@ -45,16 +45,23 @@ class VerificationState {
   int prixUSD;
   String lienPartage; // Sharing link (optional)
   List<DocumentUpload> documents; // Uploaded documents (optional)
+  bool consentGiven; // Case à cocher: accord du vendeur
 
   // FONCIRA terrain data (marketplace)
+  String? terrainId; // Terrain ID from marketplace
   String? terrainTitre; // Readonly terrain title from marketplace
   String? terrainPhoto; // Readonly terrain photo from marketplace
   String? terrainSurface; // Readonly terrain surface from marketplace
+  String? terrainLocation; // Terrain location/address
 
   // Client data
   String prenom;
   String whatsapp;
+  String sellerWhatsapp; // Numéro WhatsApp du vendeur (obligatoire)
   String paysCode; // Déduit de l'indicatif WhatsApp
+
+  // Service data
+  String serviceType; // 'complete' ou 'accompaniment'
 
   // Verification data
   NiveauRisque niveauRisque;
@@ -74,12 +81,17 @@ class VerificationState {
     this.prixUSD = 0,
     this.lienPartage = '',
     this.documents = const [],
+    this.consentGiven = false,
+    this.terrainId,
     this.terrainTitre,
     this.terrainPhoto,
     this.terrainSurface,
+    this.terrainLocation,
     this.prenom = '',
     this.whatsapp = '',
+    this.sellerWhatsapp = '',
     this.paysCode = 'TG', // Default: Togo
+    this.serviceType = 'complete', // Vérification complète par défaut
     this.niveauRisque = NiveauRisque.faible,
     this.agentNom = 'Kofi Mensah',
     this.agentPhoto = 'assets/agent_placeholder.png',
@@ -122,12 +134,17 @@ class VerificationState {
     int? prixUSD,
     String? lienPartage,
     List<DocumentUpload>? documents,
+    bool? consentGiven,
+    String? terrainId,
     String? terrainTitre,
     String? terrainPhoto,
     String? terrainSurface,
+    String? terrainLocation,
     String? prenom,
     String? whatsapp,
+    String? sellerWhatsapp,
     String? paysCode,
+    String? serviceType,
     NiveauRisque? niveauRisque,
     String? agentNom,
     String? agentPhoto,
@@ -140,12 +157,17 @@ class VerificationState {
       prixUSD: prixUSD ?? this.prixUSD,
       lienPartage: lienPartage ?? this.lienPartage,
       documents: documents ?? this.documents,
+      consentGiven: consentGiven ?? this.consentGiven,
+      terrainId: terrainId ?? this.terrainId,
       terrainTitre: terrainTitre ?? this.terrainTitre,
       terrainPhoto: terrainPhoto ?? this.terrainPhoto,
       terrainSurface: terrainSurface ?? this.terrainSurface,
+      terrainLocation: terrainLocation ?? this.terrainLocation,
       prenom: prenom ?? this.prenom,
       whatsapp: whatsapp ?? this.whatsapp,
+      sellerWhatsapp: sellerWhatsapp ?? this.sellerWhatsapp,
       paysCode: paysCode ?? this.paysCode,
+      serviceType: serviceType ?? this.serviceType,
       niveauRisque: niveauRisque ?? this.niveauRisque,
       agentNom: agentNom ?? this.agentNom,
       agentPhoto: agentPhoto ?? this.agentPhoto,

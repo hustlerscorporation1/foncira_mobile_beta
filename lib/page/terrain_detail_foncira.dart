@@ -175,14 +175,8 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
                         children: [
                           _statusChip(
                             Icons.check_circle_rounded,
-                            'Vérification de base : OK',
+                            'Vérification de base : effectuée',
                             kSuccess,
-                          ),
-                          const SizedBox(width: 8),
-                          _statusChip(
-                            Icons.warning_amber_rounded,
-                            'Analyse approfondie :  Non effectuée',
-                            kWarning,
                           ),
                         ],
                       ),
@@ -200,68 +194,18 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(
-                              Icons.edit_note_rounded,
+                              Icons.info_outline_rounded,
                               color: kGold,
                               size: 18,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
-                              child: RichText(
-                                text: TextSpan(
-                                  style: GoogleFonts.inter(
-                                    color: kTextSecondary,
-                                    fontSize: 12,
-                                    height: 1.5,
-                                  ),
-                                  children: [
-                                    const TextSpan(
-                                      text: 'Ce terrain a passé une ',
-                                    ),
-                                    TextSpan(
-                                      text: 'vérification initiale',
-                                      style: GoogleFonts.inter(
-                                        color: kTextPrimary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const TextSpan(text: '. Une '),
-                                    TextSpan(
-                                      text: 'analyse approfondie',
-                                      style: GoogleFonts.inter(
-                                        color: kGold,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    const TextSpan(text: ' est recommandée '),
-                                    TextSpan(
-                                      text: 'avant',
-                                      style: GoogleFonts.inter(
-                                        color: kTextPrimary,
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 12,
-                                        decoration: TextDecoration.underline,
-                                      ),
-                                    ),
-                                    const TextSpan(text: ' achat.'),
-                                  ],
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            GestureDetector(
-                              onTap: () => _showInfoDialog(),
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: kDarkCardLight,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.info_outline_rounded,
-                                  color: kTextMuted,
-                                  size: 14,
+                              child: Text(
+                                'La vérification approfondie du cadastre, coutumier et absence de litiges est recommandée avant achat.',
+                                style: GoogleFonts.inter(
+                                  color: kTextSecondary,
+                                  fontSize: 12,
+                                  height: 1.5,
                                 ),
                               ),
                             ),
@@ -269,12 +213,6 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
                         ),
                       ),
                       const SizedBox(height: 28),
-
-                      // ════════════════════════════════════════
-                      // 2. SOCIAL PROOF — Trust Signals
-                      // ════════════════════════════════════════
-                      const SocialProofBanner(),
-                      const SizedBox(height: 24),
 
                       // ════════════════════════════════════════
                       // 3. INFORMATIONS CLÉS
@@ -318,18 +256,14 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
                                   'Bitumée à 50m',
                                 ),
                                 _infoTile(
-                                  Icons.location_city_rounded,
-                                  'Quartier',
-                                  t.quartier.isNotEmpty
-                                      ? t.quartier
-                                      : 'Calme & desservi',
+                                  Icons.map_rounded,
+                                  'Localisation',
+                                  '${t.quartier.isNotEmpty ? t.quartier : 'Zone'} - ${t.zone.isNotEmpty ? t.zone : 'Calme & desservi'}',
                                 ),
                                 _infoTile(
-                                  Icons.map_rounded,
-                                  'Zone',
-                                  t.zone.isNotEmpty
-                                      ? t.zone
-                                      : 'Calme & desservi',
+                                  Icons.home_work_rounded,
+                                  'Disponibilité',
+                                  'Immédiate',
                                 ),
                               ],
                             ),
@@ -339,105 +273,7 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
                       const SizedBox(height: 28),
 
                       // ════════════════════════════════════════
-                      // 4. VÉRIFICATION DE BASE EFFECTUÉE
-                      // ════════════════════════════════════════
-                      _sectionTitle('Vérification de base effectuée'),
-                      const SizedBox(height: 12),
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: kDarkCard,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: kBorderDark),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Verified items
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      _verifItem(
-                                        true,
-                                        'Existence vendeur confirmée',
-                                      ),
-                                      _verifItem(
-                                        true,
-                                        'Localisation terrain confirmée',
-                                      ),
-                                      _verifItem(
-                                        true,
-                                        'Cohérence informations vérifiée',
-                                      ),
-                                      _verifItem(
-                                        true,
-                                        'Photos terrain vérifiées',
-                                      ),
-                                      _verifItem(
-                                        true,
-                                        'Disponibilité confirmée',
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      _verifItem(false, 'Cadastre'),
-                                      _verifItem(false, 'Coutumier'),
-                                      _verifItem(false, 'Géomètre'),
-                                      _verifItem(false, 'Litige'),
-                                      _verifItem(false, 'Double vente'),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 14),
-                            // Warning note
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: kWarningSurface,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.arrow_downward_rounded,
-                                    color: kWarning,
-                                    size: 14,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Une vérification approfondie est recommandée pour s\'assurer de l\'absence de litige, double vente, conflit coutumier, ou autre anomalie.',
-                                      style: GoogleFonts.inter(
-                                        color: kWarning,
-                                        fontSize: 11,
-                                        height: 1.4,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-
-                      // ════════════════════════════════════════
-                      // 5. DESCRIPTION
+                      // 4. DESCRIPTION
                       // ════════════════════════════════════════
                       if (t.description != null &&
                           t.description!.isNotEmpty) ...[
@@ -463,7 +299,7 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
                       const SizedBox(height: 28),
 
                       // ════════════════════════════════════════
-                      // 10. SECTION CONVERSION — Pourquoi vérifier
+                      // 7. LOCALISATION ET POURQUOI VÉRIFIER
                       // ════════════════════════════════════════
                       if (t.coordinates != null)
                         LayoutBuilder(
@@ -880,27 +716,30 @@ class _TerrainDetailFonciraState extends State<TerrainDetailFoncira> {
             ),
           ],
           const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: kGoldSurface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: kGold.withValues(alpha: 0.2)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.verified_rounded, color: kGold, size: 14),
-                const SizedBox(width: 6),
-                Text(
-                  'Vendeur identifié FONCIRA',
-                  style: GoogleFonts.inter(
-                    color: kGold,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: kGoldSurface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: kGold.withValues(alpha: 0.2)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.verified_rounded, color: kGold, size: 14),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Vendeur identifié FONCIRA',
+                    style: GoogleFonts.inter(
+                      color: kGold,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],

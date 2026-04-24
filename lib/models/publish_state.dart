@@ -41,6 +41,10 @@ class PublishState {
   final int prixFCFA;
   final PublishDocumentType? typeDocument;
 
+  // Step 2.5: Required documents
+  final Map<String, String> requiredDocuments; // Map<docCategory, url>
+  final Map<String, String> optionalDocuments; // Map<docCategory, url>
+
   // Step 3: Description
   final String description;
 
@@ -56,13 +60,15 @@ class PublishState {
     this.superficie = 0,
     this.prixFCFA = 0,
     this.typeDocument,
+    this.requiredDocuments = const {},
+    this.optionalDocuments = const {},
     this.description = '',
     this.isPublished = false,
     this.isFeatured = false,
   });
 
   // ── Getters ──
-  bool hasMinPhotos() => photoUrls.length >= 3;
+  bool hasMinPhotos() => photoUrls.length >= 1;
   bool hasMaxPhotos() => photoUrls.length >= 8;
   bool isEssentialInfoComplete() =>
       titre.isNotEmpty &&
@@ -70,6 +76,19 @@ class PublishState {
       superficie > 0 &&
       prixFCFA > 0 &&
       typeDocument != null;
+
+  // Check if all required documents are uploaded
+  bool hasAllRequiredDocuments() {
+    const requiredDocs = [
+      'titre_foncier',
+      'plan_terrain',
+      'autorisation_vente',
+    ];
+    return requiredDocs.every((doc) => requiredDocuments.containsKey(doc));
+  }
+
+  // Get count of uploaded required documents
+  int get uploadedRequiredDocumentsCount => requiredDocuments.length;
 
   // ── Conversion USD ──
   static const double kFcfaToUsdRate = 655.957;
@@ -89,6 +108,8 @@ class PublishState {
     int? superficie,
     int? prixFCFA,
     PublishDocumentType? typeDocument,
+    Map<String, String>? requiredDocuments,
+    Map<String, String>? optionalDocuments,
     String? description,
     bool? isPublished,
     bool? isFeatured,
@@ -101,6 +122,8 @@ class PublishState {
       superficie: superficie ?? this.superficie,
       prixFCFA: prixFCFA ?? this.prixFCFA,
       typeDocument: typeDocument ?? this.typeDocument,
+      requiredDocuments: requiredDocuments ?? this.requiredDocuments,
+      optionalDocuments: optionalDocuments ?? this.optionalDocuments,
       description: description ?? this.description,
       isPublished: isPublished ?? this.isPublished,
       isFeatured: isFeatured ?? this.isFeatured,
@@ -122,7 +145,7 @@ class PublishState {
       'main_photo_url': photoUrls.isNotEmpty ? photoUrls[0] : null,
       'additional_photos': photoUrls.length > 1 ? photoUrls.sublist(1) : [],
       'terrain_status': 'disponible',
-      'status': 'publie',
+      'status': 'en_attente_validation',
       'is_viabilise': false,
       'times_viewed': 0,
       'times_inquired': 0,

@@ -6,7 +6,7 @@ import '../providers/notification_provider.dart';
 import '../theme/colors.dart';
 
 // ══════════════════════════════════════════════════════════════
-//  FONCIRA — Notifications Page (Fil de messages)
+//  FONCIRA — Notifications Page (Real-time Stream)
 // ══════════════════════════════════════════════════════════════
 
 class NotificationsPage extends StatefulWidget {
@@ -17,13 +17,22 @@ class NotificationsPage extends StatefulWidget {
 }
 
 class _NotificationsPageState extends State<NotificationsPage> {
+  @override
+  void initState() {
+    super.initState();
+    // Initialize notification stream on load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NotificationProvider>().initializeNotificationStream();
+    });
+  }
+
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final diff = now.difference(time);
 
     if (diff.inMinutes < 1) {
       return 'À l\'instant';
-    } else if (diff.inHours < 1) {
+    } else if (diff.inMinutes < 60) {
       return 'Il y a ${diff.inMinutes} min';
     } else if (diff.inHours < 24) {
       return 'Il y a ${diff.inHours} h';
@@ -37,15 +46,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
   }
 
   @override
-  void initState() {
-    super.initState();
-    // Mark all as read when opening page
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<NotificationProvider>().markAllAsRead();
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kDarkBg,
@@ -53,10 +53,14 @@ class _NotificationsPageState extends State<NotificationsPage> {
         child: Consumer<NotificationProvider>(
           builder: (context, notificationProvider, _) {
             final notifications = notificationProvider.notifications;
+            final isLoading = notificationProvider.isLoading;
+            final error = notificationProvider.error;
 
             return CustomScrollView(
               slivers: [
-                // App Bar with title
+                // ════════════════════════════════════════════
+                // APP BAR
+                // ════════════════════════════════════════════
                 SliverAppBar(
                   pinned: true,
                   backgroundColor: kDarkBg,
@@ -78,7 +82,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
                             ),
                           ),
                           Text(
-                            '${notifications.length} messages',
+                            '${notifications.length} notification${notifications.length != 1 ? 's' : ''}',
                             style: GoogleFonts.inter(
                               fontSize: 11,
                               color: kTextSecondary,
@@ -107,8 +111,50 @@ class _NotificationsPageState extends State<NotificationsPage> {
                     ),
                   ),
                 ),
-                // Notifications list
-                if (notifications.isEmpty)
+
+                // ════════════════════════════════════════════
+                // CONTENT
+                // ════════════════════════════════════════════
+                if (isLoading)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: CircularProgressIndicator(color: kPrimary),
+                    ),
+                  )
+                else if (error != null)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.error_outline_rounded,
+                            size: 48,
+                            color: kDanger,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Erreur',
+                            style: GoogleFonts.outfit(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: kTextPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            error,
+                            style: GoogleFonts.inter(
+                              fontSize: 13,
+                              color: kTextSecondary,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else if (notifications.isEmpty)
                   SliverFillRemaining(
                     child: Center(
                       child: Column(
@@ -138,10 +184,11 @@ class _NotificationsPageState extends State<NotificationsPage> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'Les mises à jour de votre dossier s\'afficheront ici',
+                            'Les mises à jour de votre dossier\ns\'afficheront ici',
                             style: GoogleFonts.inter(
                               fontSize: 13,
                               color: kTextSecondary,
+                              height: 1.5,
                             ),
                             textAlign: TextAlign.center,
                           ),
@@ -159,12 +206,8 @@ class _NotificationsPageState extends State<NotificationsPage> {
 
                         return _NotificationListItem(
                           notification: notification,
-                          formattedTime: _formatTime(notification.timestamp),
-                          onMarkAsRead: () {
-                            context.read<NotificationProvider>().markAsRead(
-                              notification.id,
-                            );
-                          },
+                          formattedTime: _formatTime(notification.createdAt),
+                          provider: notificationProvider,
                           isLast: isLast,
                         );
                       }, childCount: notifications.length),
@@ -182,26 +225,43 @@ class _NotificationsPageState extends State<NotificationsPage> {
 class _NotificationListItem extends StatelessWidget {
   final FonciraNotification notification;
   final String formattedTime;
-  final VoidCallback onMarkAsRead;
+  final NotificationProvider provider;
   final bool isLast;
 
   const _NotificationListItem({
     required this.notification,
     required this.formattedTime,
-    required this.onMarkAsRead,
+    required this.provider,
     this.isLast = false,
   });
 
+  void _handleNotificationTap(BuildContext context) {
+    // Mark as read
+    provider.markAsRead(notification.id);
+
+    // Navigate if verification ID is present
+    if (notification.relatedVerificationId != null) {
+      // Navigate to verification detail page
+      // Using verification provider to load the verification
+      // This will be implemented based on your existing verification flow
+      // For now, just close and mark as read
+      Navigator.pop(context);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final resultColor = notification.isPositive ? kSuccess : kWarning;
+    final iconColor = provider.getNotificationIconColor(
+      notification.notificationType,
+    );
+    final icon = provider.getNotificationIcon(notification.notificationType);
 
     return Column(
       children: [
         GestureDetector(
-          onTap: onMarkAsRead,
+          onTap: () => _handleNotificationTap(context),
           child: Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
               color: notification.isRead
                   ? Colors.transparent
@@ -210,137 +270,95 @@ class _NotificationListItem extends StatelessWidget {
               border: Border.all(
                 color: notification.isRead
                     ? kBorderDark
-                    : kGold.withOpacity(0.3),
-                width: 1,
+                    : kGold.withOpacity(0.4),
+                width: notification.isRead ? 1 : 1.5,
               ),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Avatar
+                // Notification Icon
                 Container(
-                  width: 52,
-                  height: 52,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: LinearGradient(
-                      colors: [kPrimary, kPrimaryLight],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    border: Border.all(color: kGold, width: 1.5),
-                  ),
-                  child: Center(
-                    child: Text(
-                      notification.agentInitial,
-                      style: GoogleFonts.outfit(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
+                    color: iconColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: iconColor.withOpacity(0.25),
+                      width: 1,
                     ),
                   ),
+                  child: Center(child: Icon(icon, color: iconColor, size: 22)),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 12),
+
                 // Content
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Agent name + time
+                      // Title + Time
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  notification.agentName,
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.bold,
-                                    color: kTextPrimary,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  notification.message,
-                                  style: GoogleFonts.inter(
-                                    fontSize: 13,
-                                    color: kTextSecondary,
-                                    height: 1.4,
-                                  ),
-                                ),
-                              ],
+                            child: Text(
+                              notification.title,
+                              style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: kTextPrimary,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             formattedTime,
                             style: GoogleFonts.inter(
-                              fontSize: 11,
-                              color: kTextSecondary,
+                              fontSize: 10,
+                              color: kTextMuted,
                               fontStyle: FontStyle.italic,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 10),
-                      // Result badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
+                      const SizedBox(height: 6),
+
+                      // Message
+                      Text(
+                        notification.message,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: kTextSecondary,
+                          height: 1.4,
                         ),
-                        decoration: BoxDecoration(
-                          color: resultColor.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: resultColor.withOpacity(0.4),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.check_circle_rounded,
-                              color: resultColor,
-                              size: 14,
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              notification.result,
-                              style: GoogleFonts.inter(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: resultColor,
-                              ),
-                            ),
-                          ],
-                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
+
                       // Unread indicator
                       if (!notification.isRead)
                         Padding(
-                          padding: const EdgeInsets.only(top: 10),
+                          padding: const EdgeInsets.only(top: 8),
                           child: Row(
                             children: [
                               Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
+                                width: 6,
+                                height: 6,
+                                decoration: const BoxDecoration(
                                   color: kGold,
                                   shape: BoxShape.circle,
                                 ),
                               ),
                               const SizedBox(width: 6),
                               Text(
-                                'Nouveau',
+                                'Non lue',
                                 style: GoogleFonts.inter(
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   color: kGold,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -357,8 +375,8 @@ class _NotificationListItem extends StatelessWidget {
         ),
         if (!isLast)
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Divider(color: kBorderDark, height: 1),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            child: Divider(color: kBorderDark, height: 1, thickness: 0.5),
           ),
       ],
     );

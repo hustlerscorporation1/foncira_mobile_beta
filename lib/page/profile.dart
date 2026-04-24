@@ -1,8 +1,11 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../component/mode_selector_pills.dart';
+import '../providers/user_mode_provider.dart';
 import '../theme/colors.dart';
 import '../services/admin_guard.dart';
 import 'marketplace_page.dart';
@@ -34,6 +37,17 @@ class _ProfilState extends State<Profil> {
   void initState() {
     super.initState();
     _loadUserInfo();
+    _checkModeTooltip();
+  }
+
+  Future<void> _checkModeTooltip() async {
+    final prefs = await SharedPreferences.getInstance();
+    final modeProvider = context.read<UserModeProvider>();
+    if (prefs.getBool('mode_tooltip_seen') == null &&
+        modeProvider.isBuyerMode) {
+      // Will be shown by ModeSelectorPills component
+      await prefs.setBool('mode_tooltip_seen', true);
+    }
   }
 
   Future<void> _loadUserInfo() async {
@@ -56,6 +70,12 @@ class _ProfilState extends State<Profil> {
     Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
   }
 
+  bool _shouldShowTooltip() {
+    // Check if this is first time seeing the tooltip
+    // This will be read from SharedPreferences in _checkModeTooltip
+    return false; // Component handles tooltip display
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -65,7 +85,16 @@ class _ProfilState extends State<Profil> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              const SizedBox(height: 16),
+              // ── Mode Selector Pills (Acheteur / Vendeur) ──
+              Center(
+                child: ModeSelectorPills(
+                  showTooltip: _shouldShowTooltip(),
+                  onModeChanged: () {
+                    // Rebuild to update UI
+                    setState(() {});
+                  },
+                ),
+              ),
               const SizedBox(height: 24),
 
               // ── Avatar ──

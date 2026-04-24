@@ -10,8 +10,8 @@ import 'package:flutter/material.dart';
 const double kFcfaToUsdRate = 655.957;
 
 // ── Service Pricing ──────────────────────────────────────────
-const int kVerificationPriceFCFA = 150000; // 150,000 XOF
-const int kVerificationPriceUSD = 259; // $259
+const int kVerificationPriceFCFA = 250000; // 250,000 XOF
+const int kVerificationPriceUSD = 380; // $380
 
 // ── Primary ──────────────────────────────────────────────────
 const Color kPrimary = Color(0xFF0A6847);
